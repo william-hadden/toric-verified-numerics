@@ -1,0 +1,11 @@
+# Data: h polynomial approximations 
+
+## `polyCheb.mx`
+
+- Description: 
+Chebyshev polynomial approximation of the symplectic on $[0, \pi]^2$.
+
+- Generated from:
+notebooks/approximateMetric/"MathematicaImplementation For DanielEllieWill".
+
+## `...`

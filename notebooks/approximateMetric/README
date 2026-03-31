@@ -1,0 +1,19 @@
+# Generate the Approximate `h`
+
+## `"MathematicalImplimentation for MathematicaImplementation For DanielEllieWill".nb`
+
+**Description**
+Toby's origional Chebyshev solver.
+
+**Notes**
+- Chebyshev polynomial extraction was added by the Australians.
+- Used to generate `polyCheb.mx`
+
+---
+
+## `"MathematicaImplementationV8 For DanielAndCo".nb`
+
+**Description**
+Updated solver which includes coefficent estimation.
+
+**Notes**
