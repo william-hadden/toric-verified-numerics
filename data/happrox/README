@@ -1,11 +1,9 @@
-# Data: h polynomial approximations 
+# Data: h polynomial approximations
+
+## `coeffs.csv`
+
+Dense matrix of Chebyshev coefficients exported from `MathematicaImplementationV8 For DanielAndCo.nb`, with row `m+1` and column `n+1` equal to the coefficient of `T_m(2x-1) T_n(1-2y)` on `[0,1]^2`. Equivalently, on the square inside the hexagon `[0,1] x [-1,0]`, the same coefficients give `T_m(2x-1) T_n(2Y+1)` after the substitution `Y = -y`.
 
 ## `polyCheb.mx`
 
-- Description: 
-Chebyshev polynomial approximation of the symplectic on $[0, \pi]^2$.
-
-- Generated from:
-notebooks/approximateMetric/"MathematicaImplementation For DanielEllieWill".
-
-## `...`
+Legacy Mathematica `DumpSave` artifact from `MathematicaImplementation For DanielEllieWill.nb`.
