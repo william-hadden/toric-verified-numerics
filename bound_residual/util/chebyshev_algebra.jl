@@ -104,11 +104,23 @@ end
 
 """
 Add `scale * T_mode * coeffs` to a one-dimensional output array.
+
+If `coeffs` represents `sum_{n >= 0} c_n T_n`, this adds
+`scale * sum_{n >= 0} c_n T_mode T_n`
+to `out`.
+
+The caller must provide `out` with enough room for the full product. If
+`coeffs` has length `N + 1`, then `out` must have length at least `mode + N + 1`,
+since the highest target mode is `T_{mode + N}`.
+
+The update uses the product identity
+`T_m(x) T_n(x) = (T_{m+n}(x) + T_{|m-n|}(x)) / 2`,
+so each coefficient contributes half to mode `m + n` and half to mode `|m - n|`, see DLMF 18.18.21.
 """
 function cheb_add_scaled_basis_product_1d!(out::AbstractVector{Float64}, coeffs::AbstractVector{<:Real}, mode::Integer, scale)
     half_scale = scale / 2
 
-    @inbounds for j in eachindex(coeffs)
+    for j in eachindex(coeffs) # Can potentially add @inbounds for speed gain
         contribution = half_scale * coeffs[j]
         out[j + mode] += contribution
         out[abs((j - 1) - mode) + 1] += contribution
@@ -131,7 +143,7 @@ function cheb_mul1(a::AbstractVector{<:Real}, b::AbstractVector{<:Real})::Vector
 
     out = zeros(Float64, length(a) + length(b) - 1)
 
-    @inbounds for i in eachindex(small)
+    for i in eachindex(small)
         coeff = small[i]
         iszero(coeff) && continue
         cheb_add_scaled_basis_product_1d!(out, large, i - 1, coeff)
@@ -142,11 +154,20 @@ end
 
 """
 Add `scale * T_modex * T_modey * coeffs` to a two-dimensional output array.
+
+This is the tensor-product analogue of `cheb_add_scaled_basis_product_1d!`.
+The caller must provide `out` with enough room for the full tensor-product
+update. If `coeffs` has size `(Nx + 1, Ny + 1)`, then `out` must have size at
+least `(modex + Nx + 1, modey + Ny + 1)`.
+
+Applying
+`T_m T_n = (T_{m+n} + T_{|m-n|}) / 2` (DLMF 18.18.21)
+in the `x` variable and again in the `y` variable produces four target modes.
 """
 function cheb_add_scaled_basis_product_2d!(out::AbstractMatrix{Float64}, coeffs::AbstractMatrix{<:Real}, modex::Integer, modey::Integer, scale)
     quarter_scale = scale / 4
 
-    @inbounds for j in axes(coeffs, 2), i in axes(coeffs, 1)
+    for j in axes(coeffs, 2), i in axes(coeffs, 1)
         contribution = quarter_scale * coeffs[i, j]
         x_hi = i + modex
         x_lo = abs((i - 1) - modex) + 1
@@ -176,7 +197,7 @@ function cheb_mul2(A::AbstractMatrix{<:Real}, B::AbstractMatrix{<:Real})::Matrix
 
     out = zeros(Float64, size(A, 1) + size(B, 1) - 1, size(A, 2) + size(B, 2) - 1)
 
-    @inbounds for j in axes(small, 2), i in axes(small, 1)
+    for j in axes(small, 2), i in axes(small, 1)
         coeff = small[i, j]
         iszero(coeff) && continue
         cheb_add_scaled_basis_product_2d!(out, large, i - 1, j - 1, coeff)
@@ -191,7 +212,7 @@ Multiply a tensor-product Chebyshev series by the coordinate `x` on `[0,1]^2`.
 function cheb_mul_x(A::AbstractMatrix{<:Real})::Matrix{Float64}
     out = zeros(Float64, size(A, 1) + 1, size(A, 2))
 
-    @inbounds for j in axes(A, 2), i in axes(A, 1)
+    for j in axes(A, 2), i in axes(A, 1)
         coeff = A[i, j]
         half_contribution = coeff / 2
         quarter_contribution = coeff / 4
@@ -210,7 +231,7 @@ Multiply a tensor-product Chebyshev series by the coordinate `y` on `[0,1]^2`.
 function cheb_mul_y(A::AbstractMatrix{<:Real})::Matrix{Float64}
     out = zeros(Float64, size(A, 1), size(A, 2) + 1)
 
-    @inbounds for j in axes(A, 2), i in axes(A, 1)
+    for j in axes(A, 2), i in axes(A, 1)
         coeff = A[i, j]
         half_contribution = coeff / 2
         quarter_contribution = coeff / 4
