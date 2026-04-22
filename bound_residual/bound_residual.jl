@@ -1,3 +1,5 @@
+using IntervalArithmetic
+
 include(joinpath(@__DIR__, "util", "io.jl"))
 include(joinpath(@__DIR__, "util", "chebyshev_algebra.jl"))
 include(joinpath(@__DIR__, "util", "problem.jl"))
@@ -10,7 +12,8 @@ function compute_bound_residual(coeffs_path::AbstractString; p::Integer = DEFAUL
     println("Step 1: Load and normalize u0 ... ok")
 
     step2 = step2_coarse_sup_bounds(step1.pack)
-    println("Step 2: ||H||_∞ <= $(step2.H_bound), ||G||_∞ <= $(step2.G_bound)")
+    #println("Step 2: ||H||_∞ <= $(step2.H_bound), ||G||_∞ <= $(step2.G_bound)")
+    println("Step 2: ||H||_∞ <= [$(inf(step2.H_bound)), $(sup(step2.H_bound))], " * "||G||_∞ <= [$(inf(step2.G_bound)), $(sup(step2.G_bound))]")
 
     step3 = step3_taylor_tail_bound(step2.H_bound, step2.G_bound, p)
     println("Step 3: ||G * (exp(H) - exp_p(H))||_∞ <= $(step3.total_bound)")
@@ -43,3 +46,5 @@ end
 if abspath(PROGRAM_FILE) == @__FILE__
     main()
 end
+
+# exact(k) rather than true(k) 

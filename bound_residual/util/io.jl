@@ -72,13 +72,13 @@ end
 """
 Evaluate a tensor-product Chebyshev series at a single point `(x, y)` in `[0,1]^2`.
 """
-function evaluate_coeffs_at_point(coeffs::AbstractMatrix{<:Real}, x::Real, y::Real)::Float64
+function evaluate_coeffs_at_point(coeffs::AbstractMatrix{<:Number}, x::Real, y::Real)
     Tx = chebyshev_values(2 * x - 1, size(coeffs, 1) - 1)
     Ty = chebyshev_values(1 - 2 * y, size(coeffs, 2) - 1)
 
-    value = 0.0
+    value = zero(promote_type(eltype(coeffs), Float64))
     for j in axes(coeffs, 2)
-        inner = 0.0
+        inner = zero(promote_type(eltype(coeffs), Float64))
         for i in axes(coeffs, 1)
             inner += coeffs[i, j] * Tx[i]
         end

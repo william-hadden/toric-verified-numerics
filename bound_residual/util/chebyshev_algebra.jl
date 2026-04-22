@@ -1,23 +1,26 @@
 """
 Return a dense zero coefficient array with the requested bidegree.
 """
-function cheb_zero(degx::Integer, degy::Integer)::Matrix{Float64}
+function cheb_zero(degx::Integer, degy::Integer, ::Type{T} = Float64) where {T<:Number}
     degx >= 0 || error("Expected a nonnegative x-degree")
     degy >= 0 || error("Expected a nonnegative y-degree")
-    return zeros(Float64, degx + 1, degy + 1)
+    return zeros(T, degx + 1, degy + 1)
 end
+
+coeff_is_exact_zero(x::Number) = iszero(x)
+coeff_is_exact_zero(x::Interval) = isequal_interval(x, zero(x))
 
 """
 Trim exact zero rows and columns from the outer boundary of a coefficient array.
 """
 function cheb_trim_exact(coeffs::AbstractMatrix{<:Number})
     last_row = size(coeffs, 1)
-    while last_row > 1 && all(iszero, @view coeffs[last_row, :])
+    while last_row > 1 && all(coeff_is_exact_zero, @view coeffs[last_row, :])
         last_row -= 1
     end
 
     last_col = size(coeffs, 2)
-    while last_col > 1 && all(iszero, @view coeffs[:, last_col])
+    while last_col > 1 && all(coeff_is_exact_zero, @view coeffs[:, last_col])
         last_col -= 1
     end
 
@@ -27,8 +30,9 @@ end
 """
 Return the `1 x 1` coefficient array of a constant series.
 """
-function cheb_constant(c)::Matrix{Float64}
-    coeffs = zeros(Float64, 1, 1)
+function cheb_constant(c)
+    T = promote_type(typeof(c), Float64)
+    coeffs = zeros(T, 1, 1)
     coeffs[1, 1] = c
     return coeffs
 end
@@ -36,11 +40,11 @@ end
 """
 Pad a coefficient array with zeros up to the requested bidegree.
 """
-function cheb_pad(coeffs::AbstractMatrix{<:Real}, degx::Integer, degy::Integer)::Matrix{Float64}
+function cheb_pad(coeffs::AbstractMatrix{<:Number}, degx::Integer, degy::Integer)
     degx >= size(coeffs, 1) - 1 || error("Requested x-degree is too small")
     degy >= size(coeffs, 2) - 1 || error("Requested y-degree is too small")
 
-    out = cheb_zero(degx, degy)
+    out = cheb_zero(degx, degy, eltype(coeffs))
     out[1:size(coeffs, 1), 1:size(coeffs, 2)] .= coeffs
     return out
 end
@@ -48,10 +52,11 @@ end
 """
 Add two dense coefficient arrays after zero-padding to the common bidegree.
 """
-function cheb_add(A::AbstractMatrix{<:Real}, B::AbstractMatrix{<:Real})::Matrix{Float64}
+function cheb_add(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number})
     degx = max(size(A, 1), size(B, 1)) - 1
     degy = max(size(A, 2), size(B, 2)) - 1
-    out = cheb_zero(degx, degy)
+    T = promote_type(eltype(A), eltype(B))
+    out = cheb_zero(degx, degy, T)
 
     for j in axes(A, 2), i in axes(A, 1)
         out[i, j] += A[i, j]
@@ -66,10 +71,11 @@ end
 """
 Subtract two dense coefficient arrays after zero-padding to the common bidegree.
 """
-function cheb_sub(A::AbstractMatrix{<:Real}, B::AbstractMatrix{<:Real})::Matrix{Float64}
+function cheb_sub(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number})
     degx = max(size(A, 1), size(B, 1)) - 1
     degy = max(size(A, 2), size(B, 2)) - 1
-    out = cheb_zero(degx, degy)
+    T = promote_type(eltype(A), eltype(B))
+    out = cheb_zero(degx, degy, T)
 
     for j in axes(A, 2), i in axes(A, 1)
         out[i, j] += A[i, j]
@@ -84,19 +90,22 @@ end
 """
 Scale a dense coefficient array by a scalar.
 """
-function cheb_scale(A::AbstractMatrix{<:Real}, c)::Matrix{Float64}
-    out = Matrix{Float64}(undef, size(A)...)
+function cheb_scale(A::AbstractMatrix{<:Number}, c)
+    T = promote_type(eltype(A), typeof(c))
+    out = Matrix{T}(undef, size(A)...)
     for I in eachindex(A)
         out[I] = A[I] * c
     end
     return cheb_trim_exact(out)
 end
 
+
 """
 Add a scalar to the constant mode of a coefficient array.
 """
-function cheb_add_constant(A::AbstractMatrix{<:Real}, c)::Matrix{Float64}
-    out = Matrix{Float64}(undef, size(A)...)
+function cheb_add_constant(A::AbstractMatrix{<:Number}, c)
+    T = promote_type(eltype(A), typeof(c))
+    out = Matrix{T}(undef, size(A)...)
     out .= A
     out[1, 1] += c
     return cheb_trim_exact(out)
@@ -117,7 +126,7 @@ The update uses the product identity
 `T_m(x) T_n(x) = (T_{m+n}(x) + T_{|m-n|}(x)) / 2`,
 so each coefficient contributes half to mode `m + n` and half to mode `|m - n|`, see DLMF 18.18.21.
 """
-function cheb_add_scaled_basis_product_1d!(out::AbstractVector{Float64}, coeffs::AbstractVector{<:Real}, mode::Integer, scale)
+function cheb_add_scaled_basis_product_1d!(out::AbstractVector{<:Number}, coeffs::AbstractVector{<:Number}, mode::Integer, scale)
     half_scale = scale / 2
 
     for j in eachindex(coeffs) # Can potentially add @inbounds for speed gain
@@ -132,7 +141,7 @@ end
 """
 Multiply two one-dimensional Chebyshev series in coefficient space.
 """
-function cheb_mul1(a::AbstractVector{<:Real}, b::AbstractVector{<:Real})::Vector{Float64}
+function cheb_mul1(a::AbstractVector{<:Number}, b::AbstractVector{<:Number})
     if length(a) <= length(b)
         small = a
         large = b
@@ -141,11 +150,12 @@ function cheb_mul1(a::AbstractVector{<:Real}, b::AbstractVector{<:Real})::Vector
         large = a
     end
 
-    out = zeros(Float64, length(a) + length(b) - 1)
+    T = promote_type(eltype(a), eltype(b))
+    out = zeros(T, length(a) + length(b) - 1)
 
     for i in eachindex(small)
         coeff = small[i]
-        iszero(coeff) && continue
+        coeff_is_exact_zero(coeff) && continue
         cheb_add_scaled_basis_product_1d!(out, large, i - 1, coeff)
     end
 
@@ -164,7 +174,7 @@ Applying
 `T_m T_n = (T_{m+n} + T_{|m-n|}) / 2` (DLMF 18.18.21)
 in the `x` variable and again in the `y` variable produces four target modes.
 """
-function cheb_add_scaled_basis_product_2d!(out::AbstractMatrix{Float64}, coeffs::AbstractMatrix{<:Real}, modex::Integer, modey::Integer, scale)
+function cheb_add_scaled_basis_product_2d!(out::AbstractMatrix{<:Number}, coeffs::AbstractMatrix{<:Number}, modex::Integer, modey::Integer, scale)
     quarter_scale = scale / 4
 
     for j in axes(coeffs, 2), i in axes(coeffs, 1)
@@ -186,7 +196,7 @@ end
 """
 Multiply two tensor-product Chebyshev series in coefficient space.
 """
-function cheb_mul2(A::AbstractMatrix{<:Real}, B::AbstractMatrix{<:Real})::Matrix{Float64}
+function cheb_mul2(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number})
     if length(A) <= length(B)
         small = A
         large = B
@@ -195,11 +205,12 @@ function cheb_mul2(A::AbstractMatrix{<:Real}, B::AbstractMatrix{<:Real})::Matrix
         large = A
     end
 
-    out = zeros(Float64, size(A, 1) + size(B, 1) - 1, size(A, 2) + size(B, 2) - 1)
+    T = promote_type(eltype(A), eltype(B))
+    out = zeros(T, size(A, 1) + size(B, 1) - 1, size(A, 2) + size(B, 2) - 1)
 
     for j in axes(small, 2), i in axes(small, 1)
         coeff = small[i, j]
-        iszero(coeff) && continue
+        coeff_is_exact_zero(coeff) && continue
         cheb_add_scaled_basis_product_2d!(out, large, i - 1, j - 1, coeff)
     end
 
@@ -209,8 +220,8 @@ end
 """
 Multiply a tensor-product Chebyshev series by the coordinate `x` on `[0,1]^2`.
 """
-function cheb_mul_x(A::AbstractMatrix{<:Real})::Matrix{Float64}
-    out = zeros(Float64, size(A, 1) + 1, size(A, 2))
+function cheb_mul_x(A::AbstractMatrix{<:Number})
+    out = zeros(eltype(A), size(A, 1) + 1, size(A, 2))
 
     for j in axes(A, 2), i in axes(A, 1)
         coeff = A[i, j]
@@ -228,8 +239,8 @@ end
 """
 Multiply a tensor-product Chebyshev series by the coordinate `y` on `[0,1]^2`.
 """
-function cheb_mul_y(A::AbstractMatrix{<:Real})::Matrix{Float64}
-    out = zeros(Float64, size(A, 1), size(A, 2) + 1)
+function cheb_mul_y(A::AbstractMatrix{<:Number})
+    out = zeros(eltype(A), size(A, 1), size(A, 2) + 1)
 
     for j in axes(A, 2), i in axes(A, 1)
         coeff = A[i, j]
@@ -282,7 +293,7 @@ means adding `a_k T_0(x) T_0(y)` to the constant mode.
 This is the usual Horner identity for polynomial evaluation, applied in the
 ring of tensor-product Chebyshev series.
 """
-function cheb_horner_scalar_poly(H::AbstractMatrix{<:Real}, coeffs::AbstractVector{<:Real})::Matrix{Float64}
+function cheb_horner_scalar_poly(H::AbstractMatrix{<:Number}, coeffs::AbstractVector{<:Real})
     isempty(coeffs) && error("Expected at least one scalar coefficient")
     acc = cheb_constant(coeffs[end])
 
@@ -298,4 +309,4 @@ end
 """
 Bound the sup norm of a Chebyshev series by summing absolute coefficients.
 """
-chebyshev_coeff_sup_bound(coeffs::AbstractMatrix{<:Real}) = sum(abs, coeffs)
+chebyshev_coeff_sup_bound(coeffs::AbstractMatrix{<:Number}) = sum(abs, coeffs)

@@ -15,9 +15,9 @@ output coefficients `{b_k}` are their `{a_r}`. The implementation keeps one
 trailing zero mode so the output has the same length as the input coefficient
 vector.
 """
-function cheb_diff_1d(coeffs::AbstractVector{<:Real})::Vector{Float64}
+function cheb_diff_1d(coeffs::AbstractVector{<:Number})
     N = length(coeffs) - 1
-    deriv = zeros(Float64, N + 1)
+    deriv = zeros(eltype(coeffs), N + 1)
     N == 0 && return deriv
 
     deriv[N] = 2 * N * coeffs[N + 1]
@@ -32,8 +32,8 @@ end
 """
 Differentiate a coefficient array in the `x` variable on `[0,1]`.
 """
-function differentiate_coeffs_x(coeffs::AbstractMatrix{<:Real})::Matrix{Float64}
-    out = zeros(Float64, size(coeffs))
+function differentiate_coeffs_x(coeffs::AbstractMatrix{<:Number})
+    out = zeros(eltype(coeffs), size(coeffs))
     for j in axes(coeffs, 2)
         out[:, j] .= 2 .* cheb_diff_1d(@view coeffs[:, j])
     end
@@ -43,8 +43,8 @@ end
 """
 Differentiate a coefficient array in the `y` variable on `[0,1]`.
 """
-function differentiate_coeffs_y(coeffs::AbstractMatrix{<:Real})::Matrix{Float64}
-    out = zeros(Float64, size(coeffs))
+function differentiate_coeffs_y(coeffs::AbstractMatrix{<:Number})
+    out = zeros(eltype(coeffs), size(coeffs))
     for i in axes(coeffs, 1)
         out[i, :] .= -2 .* cheb_diff_1d(vec(@view coeffs[i, :]))
     end
@@ -54,8 +54,8 @@ end
 """
 Assemble `u0` together with its first and second derivative coefficient arrays.
 """
-function build_derivative_pack(coeffs::AbstractMatrix{<:Real})
-    u0 = Matrix{Float64}(coeffs)
+function build_derivative_pack(coeffs::AbstractMatrix{<:Number})
+    u0 = copy(coeffs)
     ux = differentiate_coeffs_x(u0)
     uy = differentiate_coeffs_y(u0)
     uxx = differentiate_coeffs_x(ux)
@@ -179,8 +179,9 @@ end
 
 """
 Compute the coefficient array of `H = 2u0 - 2(x ux + y uy)`.
+RHS of 3.27 - \rho_can - c
 """
-function compute_H_coeffs(pack)::Matrix{Float64}
+function compute_H_coeffs(pack)
     return cheb_scale(
         cheb_sub(
             pack.u0,
@@ -193,7 +194,7 @@ end
 """
 Compute the coefficient array of the polynomial factor `G`.
 """
-function compute_G_coeffs(pack, eqn_coeffs)::Matrix{Float64}
+function compute_G_coeffs(pack, eqn_coeffs)
     term1 = cheb_mul2(eqn_coeffs.c1a, cheb_mul2(pack.uxx, pack.uyy))
     term2 = cheb_mul2(eqn_coeffs.c1b, cheb_mul2(pack.uxy, pack.uxy))
     term3 = cheb_mul2(eqn_coeffs.c2xx, pack.uxx)
@@ -211,7 +212,7 @@ end
 """
 Estimate the additive constant in `F` from one interior collocation point.
 """
-function evaluate_raw_F_at_reference(coeffs::AbstractMatrix{<:Real}; ref_index::Tuple{Int, Int} = DEFAULT_REF_INDEX)::Float64
+function evaluate_raw_F_at_reference(coeffs::AbstractMatrix{<:Number}; ref_index::Tuple{Int, Int} = DEFAULT_REF_INDEX)
     pack = build_derivative_pack(coeffs)
     xarr, yarr = make_grids(size(coeffs, 1) - 1)
     x = xarr[ref_index[1]]
@@ -235,7 +236,8 @@ end
 Load `u0` and shift only its constant Chebyshev mode so the sampled `F` is near zero.
 """
 function step1_load_and_normalize_u0(coeffs_path::AbstractString; ref_index::Tuple{Int, Int} = DEFAULT_REF_INDEX)
-    raw_coeffs = load_coeffs_csv(coeffs_path)
+    # raw_coeffs = load_coeffs_csv(coeffs_path)
+    raw_coeffs = Interval.(load_coeffs_csv(coeffs_path))
 
     # This sampled estimate of c is intentionally provisional and can later be
     # replaced by a more canonical computation of the residual constant.
@@ -293,12 +295,10 @@ The code first computes the recurrence
 until `q = M / (k + 1) < 1` becomes valid, adding any necessary initial
 terms explicitly, and then computes the tail bound using the geometric series.
 """
-function exp_tail_sup_bound(M::Float64, p::Integer)::Float64
+function exp_tail_sup_bound(M::Real, p::Integer)
     M >= 0.0 || error("Expected a nonnegative sup bound")
     p >= 0 || error("Taylor degree must be nonnegative")
 
-    # Build the first omitted Taylor term a_{p+1} = M^(p+1) / (p+1)! from the
-    # recurrence a_k = a_{k-1} * M / k, starting at a_0 = 1.
     term = 1.0
     for k in 1:p
         term *= M / k
@@ -307,20 +307,23 @@ function exp_tail_sup_bound(M::Float64, p::Integer)::Float64
 
     tail = 0.0
     k = p + 1
-    # While a_{k+1} / a_k = M / (k + 1) is not yet < 1, we cannot dominate the
-    # rest of the series by a decreasing geometric progression, so we add these
-    # terms explicitly and advance to the next one.
     while M / (k + 1) >= 1.0
         tail += term
         k += 1
         term *= M / k
     end
 
-    # Now q = M / (k + 1) < 1, hence sum_{j=k}^∞ a_j <= a_k / (1 - q).
     ratio = M / (k + 1)
     tail += term / (1.0 - ratio)
 
     return tail
+end
+
+function exp_tail_sup_bound(M::Interval{Float64}, p::Integer)::Interval{Float64}
+    sup(M) >= 0.0 || error("Expected a nonnegative sup bound")
+    p >= 0 || error("Taylor degree must be nonnegative")
+
+    return Interval(exp_tail_sup_bound(sup(M), p))
 end
 
 """
@@ -334,7 +337,7 @@ end
 """
 Bound `||G * exp_p(H) - 1||_∞` entirely in coefficient space.
 """
-function step4_poly_bound(H_coeffs::AbstractMatrix{<:Real}, G_coeffs::AbstractMatrix{<:Real}, p::Integer)
+function step4_poly_bound(H_coeffs::AbstractMatrix{<:Number}, G_coeffs::AbstractMatrix{<:Number}, p::Integer)
     exp_p_H = cheb_horner_scalar_poly(H_coeffs, exp_taylor_coeffs(p))
     P_coeffs = cheb_add_constant(cheb_mul2(G_coeffs, exp_p_H), -1.0)
     P_coeffs = cheb_pad(P_coeffs, 162 + 79 * p, 162 + 79 * p)
