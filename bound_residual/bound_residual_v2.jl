@@ -14,14 +14,11 @@ function compute_bound_residual(coeffs_path::AbstractString; p::Integer = DEFAUL
     step2 = step2_coarse_sup_bounds(step1.pack)
     println("Step 2: ||H||_∞ <= [$(inf(step2.H_bound)), $(sup(step2.H_bound))], " * "||G||_∞ <= [$(inf(step2.G_bound)), $(sup(step2.G_bound))]")
 
-    step3 = step3_taylor_tail_bound(step2.H_bound, step2.G_bound, p)
-    println("Step 3: ||G * (exp(H) - exp_p(H))||_∞ <= $(step3.total_bound)")
+    step3 = step3_compute_MA_derivative_bounds(step2.H_bound, step2.G_bound, step1.pack)
+    println("Step 3: ||MAx||_∞ <= [$(inf(step3.MAx_bound)), $(sup(step3.MAx_bound))], " * "||MAy||_∞ <= [$(inf(step3.MAy_bound)), $(sup(step3.MAy_bound))]")
 
-    step4 = step4_poly_bound(step2.H_coeffs, step2.G_coeffs, p)
-    println("Step 4: ||G * exp_p(H) - 1||_∞ <= $(step4.poly_bound)")
-
-    total_bound = step3.total_bound + step4.poly_bound
-    println("Step 5: ||E||_∞ <= $(total_bound)")
+    step4 = step4_compute_residual_bound(step3.MAx_bound, step3.MAy_bound, step2.H_bound, step2.G_bound)
+    println("Step 4: ||E||_∞ <= $(step4.residual_bound)")
 
     return (;
         p,
@@ -29,7 +26,6 @@ function compute_bound_residual(coeffs_path::AbstractString; p::Integer = DEFAUL
         step2,
         step3,
         step4,
-        total_bound,
     )
 end
 

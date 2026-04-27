@@ -349,3 +349,23 @@ function step4_poly_bound(H_coeffs::AbstractMatrix{<:Number}, G_coeffs::Abstract
         poly_bound,
     )
 end
+
+"""
+Bound the derivatives of the MA equation in coefficient space, using the coarse sup bounds for `H` and `G` to
+"""
+function step3_compute_MA_derivative_bounds()
+    # differentiate G and H in terms of x and y and get a bound on Gx, Gy, Hx, Hy
+    # compute a bound for e^{-H}
+    # use the fact that e^{-H} * MAx = Gx + G * Hx to get a bound on MAx, and similarly for MAy
+end
+
+"""
+Bound the derivatives of the MA equation in coefficient space, using the coarse sup bounds for `H` and `G` to
+"""
+function step4_compute_residual_bound()
+    # pick a point and evaluate MA = G * e^{H} at that point 
+    # combine MAx and MAy bounds to get a bound on dMA
+    # use the mean value theorem to get a bound on MA 
+    # get a bound on the residual E = MA - 1 from the MA bound 
+end
+
