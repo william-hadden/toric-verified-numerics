@@ -14,10 +14,10 @@ function compute_bound_residual(coeffs_path::AbstractString; p::Integer = DEFAUL
     step2 = step2_coarse_sup_bounds(step1.pack)
     println("Step 2: ||H||_∞ <= [$(inf(step2.H_bound)), $(sup(step2.H_bound))], " * "||G||_∞ <= [$(inf(step2.G_bound)), $(sup(step2.G_bound))]")
 
-    step3 = step3_compute_MA_derivative_bounds(step2.H_bound, step2.G_bound, step1.pack)
-    println("Step 3: ||MAx||_∞ <= [$(inf(step3.MAx_bound)), $(sup(step3.MAx_bound))], " * "||MAy||_∞ <= [$(inf(step3.MAy_bound)), $(sup(step3.MAy_bound))]")
+    step3 = step3_compute_MA_derivative_bound(step2.H_coeffs, step2.G_coeffs, step2.H_bound, step1.pack)
+    println("Step 3: ||MAx||_∞ <= [$(inf(step3.MAx_bound)), $(sup(step3.MAx_bound))], " * "||MAy||_∞ <= [$(inf(step3.MAy_bound)), $(sup(step3.MAy_bound))]" * "||dMA||_∞ <= [$(inf(step3.dMA_bound)), $(sup(step3.dMA_bound))]")
 
-    step4 = step4_compute_residual_bound(step3.MAx_bound, step3.MAy_bound, step2.H_bound, step2.G_bound)
+    step4 = step4_compute_residual_bound(step2.H_coeffs, step2.G_coeffs, step3.dMA_bound)
     println("Step 4: ||E||_∞ <= $(step4.residual_bound)")
 
     return (;

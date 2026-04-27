@@ -351,21 +351,41 @@ function step4_poly_bound(H_coeffs::AbstractMatrix{<:Number}, G_coeffs::Abstract
 end
 
 """
-Bound the derivatives of the MA equation in coefficient space, using the coarse sup bounds for `H` and `G` to
+Bound the derivatives of the MA equation in coefficient space, using the coarse sup bounds for `H` and `G` to.
 """
-function step3_compute_MA_derivative_bounds()
-    # differentiate G and H in terms of x and y and get a bound on Gx, Gy, Hx, Hy
-    # compute a bound for e^{-H}
-    # use the fact that e^{-H} * MAx = Gx + G * Hx to get a bound on MAx, and similarly for MAy
+function step3_compute_MA_derivative_bound(H_coeffs::AbstractMatrix{<:Number}, G_coeffs::AbstractMatrix{<:Number}, H_bound, pack)
+    H = copy(H_coeffs)
+    Hx_coeffs = differentiate_coeffs_x(H)
+    Hy_coeffs = differentiate_coeffs_y(H)
+    Hx_bound = chebyshev_coeff_sup_bound(Hx_coeffs)
+    Hy_bound = chebyshev_coeff_sup_bound(Hy_coeffs)
+
+    G = copy(G_coeffs)
+    Gx_coeffs = differentiate_coeffs_x(G)
+    Gy_coeffs = differentiate_coeffs_y(G)
+    Gx_bound = chebyshev_coeff_sup_bound(Gx_coeffs)
+    Gy_bound = chebyshev_coeff_sup_bound(Gy_coeffs)
+
+    MAx_bound = exp(H_bound) * (Gx_bound + Gx_bound * Hx_bound)
+    MAy_bound = exp(H_bound) * (Gy_bound + Gy_bound * Hy_bound)
+    dMA_bound = sqrt(MAx_bound^2 + MAy_bound^2) # Q: is this correct? 
+
+    return (;
+        MAx_bound,
+        MAy_bound,
+        dMA_bound
+    )
 end
 
 """
-Bound the derivatives of the MA equation in coefficient space, using the coarse sup bounds for `H` and `G` to
+Bound `||G * exp(H) - 1||_∞` using the mean value theorem.
 """
-function step4_compute_residual_bound()
-    # pick a point and evaluate MA = G * e^{H} at that point 
-    # combine MAx and MAy bounds to get a bound on dMA
-    # use the mean value theorem to get a bound on MA 
-    # get a bound on the residual E = MA - 1 from the MA bound 
+function step4_compute_residual_bound(H_coeffs::AbstractMatrix{<:Number}, G_coeffs::AbstractMatrix{<:Number}, dMA_bound)
+    MAp0 = evaluate_coeffs_at_point(G_coeffs, 0.5, 0.5) * exp(evaluate_coeffs_at_point(H_coeffs, 0.5, 0.5)) 
+    d = sqrt(1/4 + 1/4) 
+    residual = abs(MAp0-1) + dMA_bound * d
+    return (;
+        residual_bound = residual
+    )
 end
 
