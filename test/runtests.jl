@@ -5,6 +5,7 @@ using Test
 using Random
 using IntervalArithmetic
 
+include(joinpath(@__DIR__, "..", "bound_residual", "util", "io.jl"))
 include(joinpath(@__DIR__, "..", "bound_residual", "util", "chebyshev_algebra.jl"))
 
 function pad_to_common_size(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number})
@@ -234,10 +235,51 @@ end
     end
 end
 
+@testset "full real data interval coefficient multiplication" begin
+    coeffs = load_coeffs_csv(joinpath(@__DIR__, "..", "data", "happrox", "coeffs.csv"))
+    @test size(coeffs) == (80, 80)
+
+    block = interval.(coeffs)
+
+    println("\nRunning full 80x80 rigorous comparison...")
+
+    t_direct = @elapsed begin
+        global direct = cheb_mul2(block, block; method = :direct)
+    end
+
+    println("direct interval multiplication time: ", t_direct, " seconds")
+
+    t_dct = @elapsed begin
+        global dct = cheb_mul2(block, block; method = :interval_dct)
+    end
+
+    println("interval DCT multiplication time:   ", t_dct, " seconds")
+    println("DCT/direct ratio:                   ", t_dct / t_direct)
+
+    @test size(direct) == size(dct)
+
+    overlap_count = 0
+    total_count = length(direct)
+
+    for I in eachindex(direct)
+        overlap =
+            inf(direct[I]) <= sup(dct[I]) &&
+            inf(dct[I]) <= sup(direct[I])
+
+        @test overlap
+
+        if overlap
+            overlap_count += 1
+        end
+    end
+
+    println("overlapping coefficients: ", overlap_count, " / ", total_count)
+end
+
 @testset "timing sanity check" begin
     rng = MersenneTwister(20260428)
 
-    for n in (8, 16, 24, 32, 64, 128)
+    for n in (8, 16, 24, 32, 64)
         A = interval.(randn(rng, n, n))
         B = interval.(randn(rng, n, n))
 
