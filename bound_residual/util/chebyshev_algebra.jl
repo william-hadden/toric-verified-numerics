@@ -1,3 +1,12 @@
+const _CHEB_HAS_FFTW = let
+    try
+        @eval import FFTW
+        true
+    catch
+        false
+    end
+end
+
 """
 Return a dense zero coefficient array with the requested bidegree.
 """
@@ -194,9 +203,259 @@ function cheb_add_scaled_basis_product_2d!(out::AbstractMatrix{<:Number}, coeffs
 end
 
 """
-Multiply two tensor-product Chebyshev series in coefficient space.
+Apply the unnormalized DCT-I to a real vector.
+
+When FFTW is available this uses `FFTW.r2r(_, FFTW.REDFT00)`, which is the
+unnormalized DCT-I matching the Lobatto interpolation formulas below.
+Otherwise it falls back to the defining cosine sum. The fallback preserves
+correctness but is not fast.
 """
-function cheb_mul2(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number})
+function cheb_dct1(v::AbstractVector{<:Real})
+    n = length(v)
+    n >= 1 || error("Expected a nonempty vector")
+
+    T = float(promote_type(eltype(v), Float64))
+    out = zeros(T, n)
+
+    if n == 1
+        out[1] = T(v[1])
+        return out
+    end
+
+    data = T.(v)
+
+    if _CHEB_HAS_FFTW
+        return FFTW.r2r(data, FFTW.REDFT00)
+    end
+
+    N = n - 1
+    for k in 0:N
+        total = data[1] + ((-one(T))^k) * data[end]
+        for j in 1:(N - 1)
+            total += 2 * data[j + 1] * cospi(j * k / N)
+        end
+        out[k + 1] = total
+    end
+
+    return out
+end
+
+"""
+Apply the unnormalized DCT-I to an interval vector.
+
+This uses the defining cosine sum directly so every arithmetic operation is
+carried out in interval arithmetic and the output rigorously encloses the true
+transform.
+"""
+function cheb_dct1_interval(v::AbstractVector{<:Interval})
+    n = length(v)
+    n >= 1 || error("Expected a nonempty vector")
+
+    T = eltype(v)
+    out = zeros(T, n)
+
+    if n == 1
+        out[1] = v[1]
+        return out
+    end
+
+    N = n - 1
+    for k in 0:N
+        total = v[1] + (-1)^k * v[end]
+        for j in 1:(N - 1)
+            total += 2 * v[j + 1] * cospi(interval((j * k) // N))
+        end
+        out[k + 1] = total
+    end
+
+    return out
+end
+
+"""
+Convert first-kind Chebyshev coefficients to Lobatto-grid values.
+"""
+function cheb_coeffs_to_lobatto_values_1d(coeffs::AbstractVector{<:Real})
+    n = length(coeffs)
+    n >= 1 || error("Expected a nonempty coefficient vector")
+
+    T = float(promote_type(eltype(coeffs), Float64))
+    if n == 1
+        return T[T(coeffs[1])]
+    end
+
+    doubled = T.(coeffs)
+    doubled[1] *= 2
+    doubled[end] *= 2
+    return cheb_dct1(doubled) / 2
+end
+
+"""
+Convert first-kind interval Chebyshev coefficients to Lobatto-grid values.
+"""
+function cheb_coeffs_to_lobatto_values_1d(coeffs::AbstractVector{<:Interval})
+    n = length(coeffs)
+    n >= 1 || error("Expected a nonempty coefficient vector")
+
+    if n == 1
+        return [coeffs[1]]
+    end
+
+    doubled = collect(coeffs)
+    doubled[1] *= 2
+    doubled[end] *= 2
+    return cheb_dct1_interval(doubled) / 2
+end
+
+"""
+Convert Lobatto-grid values to first-kind Chebyshev coefficients.
+
+If the values are sampled at the `N + 1` Lobatto points, this returns the
+unique degree-`N` interpolating Chebyshev series.
+"""
+function cheb_lobatto_values_to_coeffs_1d(values::AbstractVector{<:Real})
+    n = length(values)
+    n >= 1 || error("Expected a nonempty values vector")
+
+    T = float(promote_type(eltype(values), Float64))
+    if n == 1
+        return T[T(values[1])]
+    end
+
+    N = n - 1
+    coeffs = cheb_dct1(T.(values)) / N
+    coeffs[1] /= 2
+    coeffs[end] /= 2
+    return coeffs
+end
+
+"""
+Convert interval Lobatto-grid values to first-kind Chebyshev coefficients.
+
+This uses the DCT-I interpolation formula with endpoint half weights, carried
+out entirely in interval arithmetic.
+"""
+function cheb_lobatto_values_to_coeffs_1d(values::AbstractVector{<:Interval})
+    n = length(values)
+    n >= 1 || error("Expected a nonempty values vector")
+
+    if n == 1
+        return [values[1]]
+    end
+
+    N = n - 1
+    coeffs = cheb_dct1_interval(values) / N
+    coeffs[1] /= 2
+    coeffs[end] /= 2
+    return coeffs
+end
+
+"""
+Apply a one-dimensional transform to every column of a matrix.
+"""
+function cheb_map_columns(transform::F, A::AbstractMatrix{<:Number}) where {F}
+    first_column = transform(@view A[:, 1])
+    out = Matrix{eltype(first_column)}(undef, length(first_column), size(A, 2))
+    out[:, 1] .= first_column
+
+    for j in 2:size(A, 2)
+        out[:, j] .= transform(@view A[:, j])
+    end
+
+    return out
+end
+
+"""
+Apply a one-dimensional transform to every row of a matrix.
+"""
+function cheb_map_rows(transform::F, A::AbstractMatrix{<:Number}) where {F}
+    first_row = transform(@view A[1, :])
+    out = Matrix{eltype(first_row)}(undef, size(A, 1), length(first_row))
+    out[1, :] .= first_row
+
+    for i in 2:size(A, 1)
+        out[i, :] .= transform(@view A[i, :])
+    end
+
+    return out
+end
+
+"""
+Convert a coefficient array to its values on the tensor-product Lobatto grid.
+"""
+function cheb_coeffs_to_lobatto_values_2d(coeffs::AbstractMatrix{<:Real})
+    tmp = cheb_map_columns(cheb_coeffs_to_lobatto_values_1d, coeffs)
+    return cheb_map_rows(cheb_coeffs_to_lobatto_values_1d, tmp)
+end
+
+"""
+Convert tensor-product Lobatto-grid values to Chebyshev coefficients.
+"""
+function cheb_lobatto_values_to_coeffs_2d(values::AbstractMatrix{<:Real})
+    tmp = cheb_map_columns(cheb_lobatto_values_to_coeffs_1d, values)
+    return cheb_map_rows(cheb_lobatto_values_to_coeffs_1d, tmp)
+end
+
+"""
+Zero coefficients below `atol` and trim the outer zero rows and columns.
+"""
+function cheb_trim_small(coeffs::AbstractMatrix{<:Real}; atol::Real = 0.0)
+    out = Matrix{float(promote_type(eltype(coeffs), typeof(atol)))}(undef, size(coeffs)...)
+    for I in eachindex(coeffs)
+        value = coeffs[I]
+        out[I] = abs(value) <= atol ? zero(eltype(out)) : value
+    end
+    return cheb_trim_exact(out)
+end
+
+"""
+Multiply two tensor-product Chebyshev series by the Lobatto-grid/DCT trick.
+
+This pads both factors to the full product bidegree, evaluates them on the
+tensor-product Chebyshev-Lobatto grid, multiplies pointwise, and transforms
+back to coefficient space. When FFTW is available the transforms are DCT-I
+based; otherwise the same transform is evaluated by its defining cosine sums.
+"""
+function cheb_mul2_dct(A::AbstractMatrix{<:Real}, B::AbstractMatrix{<:Real})
+    degx = size(A, 1) + size(B, 1) - 2
+    degy = size(A, 2) + size(B, 2) - 2
+    T = float(promote_type(eltype(A), eltype(B), Float64))
+
+    A_pad = cheb_pad(T.(A), degx, degy)
+    B_pad = cheb_pad(T.(B), degx, degy)
+
+    valuesA = cheb_coeffs_to_lobatto_values_2d(A_pad)
+    valuesB = cheb_coeffs_to_lobatto_values_2d(B_pad)
+    coeffs = cheb_lobatto_values_to_coeffs_2d(valuesA .* valuesB)
+
+    scale = max(maximum(abs, valuesA), maximum(abs, valuesB), maximum(abs, coeffs), one(T))
+    atol = 100 * eps(T) * length(coeffs) * scale
+    return cheb_trim_small(coeffs; atol)
+end
+
+"""
+Multiply two tensor-product interval Chebyshev series by the Lobatto-grid/DCT
+trick, using only interval arithmetic in the transforms.
+"""
+function cheb_mul2_interval_dct(A::AbstractMatrix{<:Interval}, B::AbstractMatrix{<:Interval})
+    degx = size(A, 1) + size(B, 1) - 2
+    degy = size(A, 2) + size(B, 2) - 2
+    T = promote_type(eltype(A), eltype(B))
+
+    A_pad = cheb_pad(Matrix{T}(A), degx, degy)
+    B_pad = cheb_pad(Matrix{T}(B), degx, degy)
+
+    valuesA = cheb_coeffs_to_lobatto_values_2d(A_pad)
+    valuesB = cheb_coeffs_to_lobatto_values_2d(B_pad)
+    coeffs = cheb_lobatto_values_to_coeffs_2d(valuesA .* valuesB)
+
+    return cheb_trim_exact(coeffs)
+end
+
+"""
+Multiply two tensor-product Chebyshev series in coefficient space by the
+direct product identity.
+"""
+function cheb_mul2_direct(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number})
     if length(A) <= length(B)
         small = A
         large = B
@@ -215,6 +474,30 @@ function cheb_mul2(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number})
     end
 
     return cheb_trim_exact(out)
+end
+
+"""
+Multiply two tensor-product Chebyshev series in coefficient space.
+
+Keyword `method` may be `:direct` for the exact coefficient-space product
+identity or `:dct` for the Lobatto-grid/DCT trick.
+"""
+function cheb_mul2(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number}; method::Symbol = :direct)
+    if method === :direct
+        return cheb_mul2_direct(A, B)
+    elseif method === :dct
+        eltype(A) <: Interval && error("method=:dct is floating-point only; use method=:interval_dct for interval coefficients")
+        eltype(B) <: Interval && error("method=:dct is floating-point only; use method=:interval_dct for interval coefficients")
+        eltype(A) <: AbstractFloat || error("method=:dct requires floating-point coefficients")
+        eltype(B) <: AbstractFloat || error("method=:dct requires floating-point coefficients")
+        return cheb_mul2_dct(A, B)
+    elseif method === :interval_dct
+        eltype(A) <: Interval || error("method=:interval_dct requires interval coefficients")
+        eltype(B) <: Interval || error("method=:interval_dct requires interval coefficients")
+        return cheb_mul2_interval_dct(A, B)
+    else
+        error("Unknown Chebyshev multiplication method: $method")
+    end
 end
 
 """
