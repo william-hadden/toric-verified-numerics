@@ -28,6 +28,17 @@ function interval_coeffs_enclose(A::AbstractMatrix{<:Interval}, B::AbstractMatri
     return true
 end
 
+function interval_coeffs_overlap(A::AbstractMatrix{<:Interval}, B::AbstractMatrix{<:Interval})
+    A_pad, B_pad = pad_to_common_size(A, B)
+    for I in eachindex(A_pad, B_pad)
+        sup(A_pad[I]) < inf(B_pad[I]) && return false
+        sup(B_pad[I]) < inf(A_pad[I]) && return false
+    end
+    return true
+end
+
+max_interval_width(A::AbstractMatrix{<:Interval}) = maximum(sup(x) - inf(x) for x in A)
+
 intervalize(A::AbstractMatrix{<:Real}) = interval.(A)
 
 function interval_methods_enclose_direct(A::AbstractMatrix{<:Interval}, B::AbstractMatrix{<:Interval}, method::Symbol)
@@ -235,45 +246,52 @@ end
     end
 end
 
-@testset "full real data interval coefficient multiplication" begin
-    coeffs = load_coeffs_csv(joinpath(@__DIR__, "..", "data", "happrox", "coeffs.csv"))
-    @test size(coeffs) == (80, 80)
+@testset "BigFloat interval DCT" begin
+    setprecision(BigFloat, 256) do
+        A_mid = BigFloat[
+            big"1.25"   big"-0.5"   big"0.125"  big"0.0";
+            big"0.75"   big"0.0"    big"-0.25" big"0.5";
+            big"-0.125" big"0.375"  big"1.0"   big"-0.625";
+            big"0.5"    big"-0.75"  big"0.25"  big"0.875";
+        ]
 
-    block = interval.(coeffs)
+        B_mid = BigFloat[
+            big"-0.375" big"0.25"   big"0.5"   big"-0.125";
+            big"0.625"  big"-0.875" big"0.0"   big"0.375";
+            big"0.25"   big"0.125"  big"-0.5"  big"0.75";
+            big"-0.5"   big"0.625"  big"-0.25" big"0.0";
+        ]
 
-    println("\nRunning full 80x80 rigorous comparison...")
+        rad = big"1e-60"
 
-    t_direct = @elapsed begin
-        global direct = cheb_mul2(block, block; method = :direct)
+        A_big = interval.(A_mid .- rad, A_mid .+ rad)
+        B_big = interval.(B_mid .- rad, B_mid .+ rad)
+
+        direct_big = cheb_mul2(A_big, B_big; method = :direct)
+        dct_big = cheb_mul2(A_big, B_big; method = :interval_dct)
+
+        @test eltype(dct_big) == Interval{BigFloat}
+        @test interval_coeffs_enclose(direct_big, dct_big)
+        @test interval_coeffs_overlap(direct_big, dct_big)
+
+        A64 = interval.(Float64.(A_mid) .- 1e-16, Float64.(A_mid) .+ 1e-16)
+        B64 = interval.(Float64.(B_mid) .- 1e-16, Float64.(B_mid) .+ 1e-16)
+
+        dct64 = cheb_mul2(A64, B64; method = :interval_dct)
+
+        width_big = max_interval_width(dct_big)
+        width_64 = BigFloat(max_interval_width(dct64))
+        improvement = width_64 / width_big
+
+        println("\nBigFloat interval DCT diagnostics:")
+        println("  max width (Float64 DCT):   ", width_64)
+        println("  max width (BigFloat DCT):  ", width_big)
+        println("  improvement factor:        ", improvement)
+        println("  log10 improvement:         ", log10(improvement))
+
+        @test width_big < big"1e-40"
+        @test width_big < width_64
     end
-
-    println("direct interval multiplication time: ", t_direct, " seconds")
-
-    t_dct = @elapsed begin
-        global dct = cheb_mul2(block, block; method = :interval_dct)
-    end
-
-    println("interval DCT multiplication time:   ", t_dct, " seconds")
-    println("DCT/direct ratio:                   ", t_dct / t_direct)
-
-    @test size(direct) == size(dct)
-
-    overlap_count = 0
-    total_count = length(direct)
-
-    for I in eachindex(direct)
-        overlap =
-            inf(direct[I]) <= sup(dct[I]) &&
-            inf(dct[I]) <= sup(direct[I])
-
-        @test overlap
-
-        if overlap
-            overlap_count += 1
-        end
-    end
-
-    println("overlapping coefficients: ", overlap_count, " / ", total_count)
 end
 
 @testset "timing sanity check" begin
@@ -293,5 +311,94 @@ end
         println("  interval direct time:   ", t_direct)
         println("  full interval DCT time: ", t_interval_dct)
         println("  full interval DCT/direct: ", t_interval_dct / t_direct)
+    end
+end
+
+@testset "full real data interval coefficient multiplication" begin
+    coeffs = load_coeffs_csv(joinpath(@__DIR__, "..", "data", "happrox", "coeffs.csv"))
+    @test size(coeffs) == (80, 80)
+
+    block = interval.(coeffs)
+
+    println("\nRunning full 80x80 rigorous comparison...")
+
+    direct_ref = Ref{Any}()
+    dct_ref = Ref{Any}()
+
+    t_direct = @elapsed begin
+        direct_ref[] = cheb_mul2(block, block; method = :direct)
+    end
+
+    t_dct = @elapsed begin
+        dct_ref[] = cheb_mul2(block, block; method = :interval_dct)
+    end
+
+    direct = direct_ref[]
+    dct = dct_ref[]
+
+    println("direct interval multiplication time: ", t_direct, " seconds")
+    println("interval DCT multiplication time:   ", t_dct, " seconds")
+    println("DCT/direct ratio:                   ", t_dct / t_direct)
+
+    @test size(direct) == size(dct)
+
+    overlaps = [
+        inf(direct[I]) <= sup(dct[I]) &&
+        inf(dct[I]) <= sup(direct[I])
+        for I in eachindex(direct)
+    ]
+
+    println("overlapping coefficients: ", count(identity, overlaps), " / ", length(overlaps))
+
+    for ok in overlaps
+        @test ok
+    end
+
+    direct_widths = [sup(direct[I]) - inf(direct[I]) for I in eachindex(direct)]
+    dct_widths = [sup(dct[I]) - inf(dct[I]) for I in eachindex(dct)]
+
+    abs_width_diffs = dct_widths .- direct_widths
+
+    println("\nInterval width diagnostics:")
+    println("  max direct width:        ", maximum(direct_widths))
+    println("  max interval DCT width:  ", maximum(dct_widths))
+    println("  mean direct width:       ", sum(direct_widths) / length(direct_widths))
+    println("  mean interval DCT width: ", sum(dct_widths) / length(dct_widths))
+
+    num_tighter_dct = count(dct_widths .< direct_widths)
+    num_tighter_direct = count(direct_widths .< dct_widths)
+    num_equal = length(direct_widths) - num_tighter_dct - num_tighter_direct
+
+    println("\nWhich method is tighter coefficientwise?")
+    println("  DCT tighter:     ", num_tighter_dct)
+    println("  direct tighter:  ", num_tighter_direct)
+    println("  equal widths:    ", num_equal)
+
+    println("\nAbsolute width difference, DCT - direct:")
+    println("  min:  ", minimum(abs_width_diffs))
+    println("  mean: ", sum(abs_width_diffs) / length(abs_width_diffs))
+    println("  max:  ", maximum(abs_width_diffs))
+
+    ratio_tol = 1e-12
+
+    width_ratios = [
+        dct_widths[i] / direct_widths[i]
+        for i in eachindex(direct_widths)
+        if direct_widths[i] > ratio_tol
+    ]
+
+    println("\nDCT width / direct width, excluding direct widths <= $(ratio_tol):")
+
+    if isempty(width_ratios)
+        println("  No coefficients had sufficiently large direct width for stable ratio analysis.")
+    else
+        sorted_ratios = sort(width_ratios)
+        median_ratio = sorted_ratios[cld(length(sorted_ratios), 2)]
+
+        println("  number used:  ", length(width_ratios))
+        println("  min ratio:    ", minimum(width_ratios))
+        println("  median ratio: ", median_ratio)
+        println("  mean ratio:   ", sum(width_ratios) / length(width_ratios))
+        println("  max ratio:    ", maximum(width_ratios))
     end
 end

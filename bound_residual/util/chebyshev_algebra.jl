@@ -7,8 +7,8 @@ const _CHEB_HAS_FFTW = let
     end
 end
 
-const _CHEB_INTERVAL_EVAL_CACHE = Dict{Int, Matrix{Interval{Float64}}}()
-const _CHEB_INTERVAL_RECOVERY_CACHE = Dict{Int, Matrix{Interval{Float64}}}()
+const _CHEB_INTERVAL_EVAL_CACHE = Dict{Tuple{Int, DataType, Int}, Any}()
+const _CHEB_INTERVAL_RECOVERY_CACHE = Dict{Tuple{Int, DataType, Int}, Any}()
 
 """
 Return a dense zero coefficient array with the requested bidegree.
@@ -21,6 +21,22 @@ end
 
 coeff_is_exact_zero(x::Number) = iszero(x)
 coeff_is_exact_zero(x::Interval) = isequal_interval(x, zero(x))
+
+cheb_interval_endpoint_type(::Type{Interval{R}}) where {R<:Real} = R
+
+function cheb_interval_precision(::Type{Interval{R}}) where {R<:Real}
+    if R === BigFloat
+        return precision(BigFloat)
+    elseif R <: AbstractFloat
+        return precision(R)
+    else
+        return 0
+    end
+end
+
+cheb_interval_cache_key(N::Integer, ::Type{T}) where {T<:Interval} = (N, T, cheb_interval_precision(T))
+
+cheb_interval_constant(::Type{T}, x) where {T<:Interval} = convert(T, x)
 
 """
 Trim exact zero rows and columns from the outer boundary of a coefficient array.
@@ -85,17 +101,18 @@ Return the cached interval cosine evaluation matrix for Lobatto nodes of order `
 
 Entry `(r+1, k+1)` equals `cos(pi * r * k / N)` enclosed as an interval.
 """
-function cheb_interval_eval_matrix(N::Integer)
+function cheb_interval_eval_matrix(N::Integer, ::Type{T}) where {T<:Interval}
     N >= 0 || error("Expected a nonnegative Lobatto order")
+    key = cheb_interval_cache_key(N, T)
 
-    return get!(_CHEB_INTERVAL_EVAL_CACHE, N) do
+    return get!(_CHEB_INTERVAL_EVAL_CACHE, key) do
         if N == 0
-            return reshape([interval(1.0)], 1, 1)
+            return reshape(T[one(T)], 1, 1)
         end
 
-        matrix = Matrix{Interval{Float64}}(undef, N + 1, N + 1)
+        matrix = Matrix{T}(undef, N + 1, N + 1)
         for r in 0:N, k in 0:N
-            matrix[r + 1, k + 1] = cospi(interval((r * k) // N))
+            matrix[r + 1, k + 1] = cospi(cheb_interval_constant(T, (r * k) // N))
         end
         matrix
     end
@@ -106,16 +123,17 @@ Return the cached interval DCT-I recovery matrix for Lobatto order `N`.
 
 This encodes the endpoint half weights in the coefficient recovery formula.
 """
-function cheb_interval_recovery_matrix(N::Integer)
+function cheb_interval_recovery_matrix(N::Integer, ::Type{T}) where {T<:Interval}
     N >= 0 || error("Expected a nonnegative Lobatto order")
+    key = cheb_interval_cache_key(N, T)
 
-    return get!(_CHEB_INTERVAL_RECOVERY_CACHE, N) do
+    return get!(_CHEB_INTERVAL_RECOVERY_CACHE, key) do
         if N == 0
-            return reshape([interval(1.0)], 1, 1)
+            return reshape(T[one(T)], 1, 1)
         end
 
-        matrix = copy(cheb_interval_eval_matrix(N))
-        matrix .*= interval(2 // N)
+        matrix = copy(cheb_interval_eval_matrix(N, T))
+        matrix .*= cheb_interval_constant(T, 2 // N)
         matrix[1, :] ./= 2
         matrix[end, :] ./= 2
         matrix[:, 1] ./= 2
@@ -361,12 +379,13 @@ Convert first-kind interval Chebyshev coefficients to Lobatto-grid values.
 function cheb_coeffs_to_lobatto_values_1d(coeffs::AbstractVector{<:Interval})
     n = length(coeffs)
     n >= 1 || error("Expected a nonempty coefficient vector")
+    T = eltype(coeffs)
 
     if n == 1
         return [coeffs[1]]
     end
 
-    return cheb_interval_eval_matrix(n - 1) * collect(coeffs)
+    return cheb_interval_eval_matrix(n - 1, T) * collect(coeffs)
 end
 
 """
@@ -400,12 +419,13 @@ out entirely in interval arithmetic.
 function cheb_lobatto_values_to_coeffs_1d(values::AbstractVector{<:Interval})
     n = length(values)
     n >= 1 || error("Expected a nonempty values vector")
+    T = eltype(values)
 
     if n == 1
         return [values[1]]
     end
 
-    return cheb_interval_recovery_matrix(n - 1) * collect(values)
+    return cheb_interval_recovery_matrix(n - 1, T) * collect(values)
 end
 
 """
@@ -451,8 +471,9 @@ Convert an interval coefficient array to Lobatto-grid values using cached
 interval cosine matrices.
 """
 function cheb_coeffs_to_lobatto_values_2d(coeffs::AbstractMatrix{<:Interval})
-    Cx = cheb_interval_eval_matrix(size(coeffs, 1) - 1)
-    Cy = cheb_interval_eval_matrix(size(coeffs, 2) - 1)
+    T = eltype(coeffs)
+    Cx = cheb_interval_eval_matrix(size(coeffs, 1) - 1, T)
+    Cy = cheb_interval_eval_matrix(size(coeffs, 2) - 1, T)
     return Cx * Matrix(coeffs) * Cy
 end
 
@@ -469,8 +490,9 @@ Convert interval Lobatto-grid values to coefficients using cached interval
 recovery matrices.
 """
 function cheb_lobatto_values_to_coeffs_2d(values::AbstractMatrix{<:Interval})
-    Rx = cheb_interval_recovery_matrix(size(values, 1) - 1)
-    Ry = cheb_interval_recovery_matrix(size(values, 2) - 1)
+    T = eltype(values)
+    Rx = cheb_interval_recovery_matrix(size(values, 1) - 1, T)
+    Ry = cheb_interval_recovery_matrix(size(values, 2) - 1, T)
     return Rx * Matrix(values) * Ry
 end
 
