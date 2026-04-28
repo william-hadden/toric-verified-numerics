@@ -7,7 +7,7 @@ include(joinpath(@__DIR__, "util", "problem.jl"))
 """
 Run the coefficient-space five-step bound computation for `E = exp(F) - 1`.
 """
-function compute_bound_residual(coeffs_path::AbstractString; p::Integer = DEFAULT_TAYLOR_DEGREE, ref_index::Tuple{Int, Int} = DEFAULT_REF_INDEX)
+function compute_bound_residual(coeffs_path::AbstractString; ref_index::Tuple{Int, Int} = DEFAULT_REF_INDEX)
     step1 = step1_load_and_normalize_u0(coeffs_path; ref_index)
     println("Step 1: Load and normalize u0 ... ok")
 
@@ -21,7 +21,6 @@ function compute_bound_residual(coeffs_path::AbstractString; p::Integer = DEFAUL
     println("Step 4: ||E||_∞ <= $(step4.residual_bound)")
 
     return (;
-        p,
         step1,
         step2,
         step3,
@@ -33,9 +32,8 @@ end
 Run the default residual-bound computation from the command line.
 """
 function main()
-    p = DEFAULT_TAYLOR_DEGREE
     ref_index = DEFAULT_REF_INDEX
-    compute_bound_residual(U0_PATH; p, ref_index)
+    compute_bound_residual(U0_PATH; ref_index)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
