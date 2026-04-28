@@ -351,24 +351,20 @@ function step4_poly_bound(H_coeffs::AbstractMatrix{<:Number}, G_coeffs::Abstract
 end
 
 """
-Bound the derivatives of the MA equation in coefficient space, using the coarse sup bounds for `H` and `G` to.
+Bound the derivatives of the MA equation in coefficient space, using the coarse sup bounds for `H`.
 """
 function step3_compute_MA_derivative_bound(H_coeffs::AbstractMatrix{<:Number}, G_coeffs::AbstractMatrix{<:Number}, H_bound, pack)
     H = copy(H_coeffs)
     Hx_coeffs = differentiate_coeffs_x(H)
     Hy_coeffs = differentiate_coeffs_y(H)
-    Hx_bound = chebyshev_coeff_sup_bound(Hx_coeffs)
-    Hy_bound = chebyshev_coeff_sup_bound(Hy_coeffs)
 
     G = copy(G_coeffs)
     Gx_coeffs = differentiate_coeffs_x(G)
     Gy_coeffs = differentiate_coeffs_y(G)
-    Gx_bound = chebyshev_coeff_sup_bound(Gx_coeffs)
-    Gy_bound = chebyshev_coeff_sup_bound(Gy_coeffs)
 
-    MAx_bound = exp(H_bound) * (Gx_bound + Gx_bound * Hx_bound)
-    MAy_bound = exp(H_bound) * (Gy_bound + Gy_bound * Hy_bound)
-    dMA_bound = sqrt(MAx_bound^2 + MAy_bound^2) # Q: is this correct? 
+    MAx_bound = exp(H_bound) * chebyshev_coeff_sup_bound(cheb_add(Gx_coeffs, cheb_mul2(G_coeffs, Hx_coeffs)))
+    MAy_bound = exp(H_bound) * chebyshev_coeff_sup_bound(cheb_add(Gy_coeffs, cheb_mul2(G_coeffs, Hy_coeffs)))
+    dMA_bound = sqrt(MAx_bound^2 + MAy_bound^2)
 
     return (;
         MAx_bound,
