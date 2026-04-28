@@ -1,26 +1,23 @@
-const DEFAULT_TAYLOR_DEGREE = 12
 const DEFAULT_REF_INDEX = (2, 2)
 const REPO_ROOT = normpath(joinpath(@__DIR__, "..", ".."))
 const U0_PATH = joinpath(REPO_ROOT, "data", "happrox", "coeffs.csv")
 
 """
-Parse one numeric CSV entry as `Float64`.
+Parse one numeric CSV entry as `BigFloat`.
 """
-function parse_csv_number(entry::AbstractString)::Float64
+function parse_csv_number(entry::AbstractString)::BigFloat
     cleaned = strip(replace(entry, '"' => ""))
-    value = tryparse(Float64, cleaned)
-    value === nothing && error("Could not parse Float64 from CSV entry: $entry")
-    return value
+    return parse(BigFloat, cleaned)
 end
 
 """
 Load the coefficient matrix from the canonical CSV export.
 """
-function load_coeffs_csv(path::AbstractString)::Matrix{Float64}
+function load_coeffs_csv(path::AbstractString)::Matrix{BigFloat}
     lines = readlines(path)
     isempty(lines) && error("Coefficient CSV is empty: $path")
 
-    rows = Vector{Vector{Float64}}(undef, length(lines))
+    rows = Vector{Vector{BigFloat}}(undef, length(lines))
     expected_cols = nothing
 
     for (i, line) in pairs(lines)
@@ -30,7 +27,7 @@ function load_coeffs_csv(path::AbstractString)::Matrix{Float64}
         rows[i] = parse_csv_number.(entries)
     end
 
-    coeffs = Matrix{Float64}(undef, length(rows), expected_cols)
+    coeffs = Matrix{BigFloat}(undef, length(rows), expected_cols)
     for i in eachindex(rows)
         coeffs[i, :] .= rows[i]
     end
@@ -56,13 +53,14 @@ Return the values `T_0(z), ..., T_degree(z)` by the three-term recurrence.
 """
 function chebyshev_values(z, degree::Integer)
     degree >= 0 || error("Chebyshev degree must be nonnegative")
-    values = Vector{Float64}(undef, degree + 1)
-    values[1] = 1.0
+    T = typeof(float(z)) # allows function to be called with float64 or BigFloat
+    values = Vector{T}(undef, degree + 1)
+    values[1] = one(T)
 
     if degree >= 1
-        values[2] = Float64(z)
+        values[2] = T(z)
         for n in 2:degree
-            values[n + 1] = 2.0 * z * values[n] - values[n - 1]
+            values[n + 1] = 2 * z * values[n] - values[n - 1]
         end
     end
 
@@ -76,9 +74,12 @@ function evaluate_coeffs_at_point(coeffs::AbstractMatrix{<:Number}, x::Real, y::
     Tx = chebyshev_values(2 * x - 1, size(coeffs, 1) - 1)
     Ty = chebyshev_values(1 - 2 * y, size(coeffs, 2) - 1)
 
-    value = zero(promote_type(eltype(coeffs), Float64))
+    # Initialise values as zero with type being the more general type of the types among
+    # coeffs, Tx. Usually expect coeffs to be Interval{BigFloat} and Tx to be BigFloat.
+    value = zero(promote_type(eltype(coeffs), eltype(Tx))) 
+
     for j in axes(coeffs, 2)
-        inner = zero(promote_type(eltype(coeffs), Float64))
+        inner = zero(promote_type(eltype(coeffs), eltype(Tx)))
         for i in axes(coeffs, 1)
             inner += coeffs[i, j] * Tx[i]
         end

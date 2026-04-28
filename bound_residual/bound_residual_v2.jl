@@ -32,6 +32,7 @@ end
 Run the default residual-bound computation from the command line.
 """
 function main()
+    setprecision(BigFloat, 100)
     ref_index = DEFAULT_REF_INDEX
     compute_bound_residual(U0_PATH; ref_index)
 end
