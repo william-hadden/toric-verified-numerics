@@ -694,3 +694,71 @@ end
 Bound the sup norm of a Chebyshev series by summing absolute coefficients.
 """
 chebyshev_coeff_sup_bound(coeffs::AbstractMatrix{<:Number}) = sum(abs, coeffs)
+
+
+
+"""
+Define the Chebyshev differentitation matrices.
+"""
+const _CHEB_DIFF_CACHE = Dict{Tuple{Int, DataType}, Any}()
+
+function cheb_diff_matrix(N::Integer, ::Type{T}=Float64) where {T<:Number}
+    N >= 1 || error("Need N >= 1")
+
+    key = (N, T)
+    return get!(_CHEB_DIFF_CACHE, key) do
+        z = [cospi(T(k) / T(N)) for k in 0:N]
+        c = ones(T, N+1)
+        c[1] = 2
+        c[end] = 2
+        c .= c .* [isodd(k) ? -one(T) : one(T) for k in 0:N]
+
+        D = zeros(T, N+1, N+1)
+
+        for i in 1:N+1, j in 1:N+1
+            if i != j
+                D[i,j] = (c[i] / c[j]) / (z[i] - z[j])
+            end
+        end
+
+        for i in 1:N+1
+            D[i,i] = -sum(D[i,j] for j in 1:N+1 if j != i)
+        end
+
+        D
+    end
+end
+
+"""
+Assemble the Lobatto-grid values of a Chebyshev series and its first and second 
+derivatives by applying the Chebyshev differentiation matrices.
+"""
+function build_lobatto_derivative_pack(coeffs::AbstractMatrix{<:Number}; pdeg::Integer=size(coeffs,1))
+    Nx = pdeg - 1
+    Ny = pdeg - 1
+    T = eltype(coeffs)
+
+    coeffs_pad = cheb_pad(coeffs, Nx, Ny)
+    u = cheb_coeffs_to_lobatto_values_2d(coeffs_pad)
+
+    Dxξ = cheb_diff_matrix(Nx, T)
+    Dyη = cheb_diff_matrix(Ny, T)
+
+    Dx = 2 .* Dxξ
+    Dy = -2 .* Dyη
+
+    ux  = Dx * u
+    uy  = u * transpose(Dy)
+
+    uxx = Dx * ux
+    uyy = uy * transpose(Dy)
+    uxy = Dx * uy
+
+    zξ = [cospi(T(k) / T(Nx)) for k in 0:Nx]
+    zη = [cospi(T(k) / T(Ny)) for k in 0:Ny]
+
+    xarr = (zξ .+ 1) ./ 2
+    yarr = (1 .- zη) ./ 2
+
+    return (; u, ux, uy, uxx, uyy, uxy, xarr, yarr, pdeg)
+end

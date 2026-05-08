@@ -17,7 +17,7 @@ function compute_bound_residual(coeffs_path::AbstractString; ref_index::Tuple{In
     step3 = step3_compute_MA_derivative_bound(step2.H_coeffs, step2.G_coeffs, step2.H_bound, step1.pack)
     println("Step 3: ||MAx||_∞ <= [$(inf(step3.MAx_bound)), $(sup(step3.MAx_bound))], " * "||MAy||_∞ <= [$(inf(step3.MAy_bound)), $(sup(step3.MAy_bound))]" * "||dMA||_∞ <= [$(inf(step3.dMA_bound)), $(sup(step3.dMA_bound))]")
 
-    step4 = step4_compute_residual_bound(step2.H_coeffs, step2.G_coeffs, step3.dMA_bound)
+    step4 = step4_compute_residual_bound_by_MVT(step2.H_coeffs, step2.G_coeffs, step3.dMA_bound)
     println("Step 4: ||E||_∞ <= $(step4.residual_bound)")
 
     return (;
@@ -28,13 +28,27 @@ function compute_bound_residual(coeffs_path::AbstractString; ref_index::Tuple{In
     )
 end
 
+function compute_bound_residual_v2(coeffs_path::AbstractString; pdeg::Integer=240)
+    step1 = step1_load_and_normalize_u0(coeffs_path)
+    println("Step 1: Load and normalize u0 ... ok")
+
+    step2 = step2_compute_GH_values_grid(step1.normalized_coeffs; pdeg)
+    println("Step 2: Compute G and H values on the grid ... ok")
+
+    step3 = step3_residual_bound_by_cheb_coeff_sum(step2)
+    println("Step 3: ||G exp(H) - 1||∞ <= $(step3.residual_bound)")
+
+    return (; step1, step2, step3)
+end
+
 """
 Run the default residual-bound computation from the command line.
 """
 function main()
     setprecision(BigFloat, 100)
     ref_index = DEFAULT_REF_INDEX
-    compute_bound_residual(U0_PATH; ref_index)
+    # compute_bound_residual(U0_PATH; ref_index)
+    compute_bound_residual_v2(U0_PATH; pdeg = 240)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

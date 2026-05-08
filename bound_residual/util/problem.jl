@@ -376,7 +376,7 @@ end
 """
 Bound `||G * exp(H) - 1||_∞` using the mean value theorem.
 """
-function step4_compute_residual_bound(H_coeffs::AbstractMatrix{<:Number}, G_coeffs::AbstractMatrix{<:Number}, dMA_bound)
+function step4_compute_residual_bound_by_MVT(H_coeffs::AbstractMatrix{<:Number}, G_coeffs::AbstractMatrix{<:Number}, dMA_bound)
     MAp0 = evaluate_coeffs_at_point(G_coeffs, 0.5, 0.5) * exp(evaluate_coeffs_at_point(H_coeffs, 0.5, 0.5)) 
     d = sqrt(1/4 + 1/4) 
     residual = abs(MAp0-1) + dMA_bound * d
@@ -385,3 +385,50 @@ function step4_compute_residual_bound(H_coeffs::AbstractMatrix{<:Number}, G_coef
     )
 end
 
+"""
+Compute the Chebyshev values of G and H on the grid.
+"""
+function step2_compute_GH_values_grid(coeffs::AbstractMatrix{<:Number}; pdeg::Integer=240)
+    pack = build_lobatto_derivative_pack(coeffs; pdeg)
+
+    G = similar(pack.u)
+    H = similar(pack.u)
+
+    for j in 1:pdeg, i in 1:pdeg
+        x = pack.xarr[i]
+        y = pack.yarr[j]
+
+        c = eqn_coefficients_at_point(x, y)
+
+        G[i,j] =
+            c.c1a  * pack.uxx[i,j] * pack.uyy[i,j] +
+            c.c1b  * pack.uxy[i,j]^2 +
+            c.c2xx * pack.uxx[i,j] +
+            c.c2yy * pack.uyy[i,j] -
+            c.c2xy * pack.uxy[i,j] +
+            c.c3
+
+        H[i,j] = 2 * pack.u[i,j] - 2 * (x * pack.ux[i,j] + y * pack.uy[i,j])
+    end
+
+    return (; G, H, pack)
+end
+
+"""
+Compute the Chebyshev coefficient sum bound for the residual.
+"""
+function step3_residual_bound_by_cheb_coeff_sum(vals)
+    residual_values = vals.G .* exp.(vals.H) .- 1
+    residual_coeffs = cheb_lobatto_values_to_coeffs_2d(residual_values)
+
+    residual_bound = chebyshev_coeff_sup_bound(residual_coeffs)
+
+    return (;
+        residual_bound,
+        residual_coeffs,
+        residual_values,
+        pack = vals.pack,
+        G_values = vals.G,
+        H_values = vals.H,
+    )
+end
