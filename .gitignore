@@ -1,2 +1,3 @@
 *.vscode
 Manifest.toml
+data/happrox/coeffs-rational.csv.zip
