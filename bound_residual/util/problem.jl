@@ -353,7 +353,7 @@ end
 """
 Bound the derivatives of the MA equation in coefficient space, using the coarse sup bounds for `H`.
 """
-function step3_compute_MA_derivative_bound(H_coeffs::AbstractMatrix{<:Number}, G_coeffs::AbstractMatrix{<:Number}, H_bound, pack)
+function step3_compute_MA_derivative_bound(H_coeffs::AbstractMatrix{<:Number}, G_coeffs::AbstractMatrix{<:Number}, H_bound)
     H = copy(H_coeffs)
     Hx_coeffs = differentiate_coeffs_x(H)
     Hy_coeffs = differentiate_coeffs_y(H)
@@ -414,21 +414,37 @@ function step2_compute_GH_values_grid(coeffs::AbstractMatrix{<:Number}; pdeg::In
     return (; G, H, pack)
 end
 
-"""
-Compute the Chebyshev coefficient sum bound for the residual.
-"""
-function step3_residual_bound_by_cheb_coeff_sum(vals)
-    residual_values = vals.G .* exp.(vals.H) .- 1
-    residual_coeffs = cheb_lobatto_values_to_coeffs_2d(residual_values)
 
-    residual_bound = chebyshev_coeff_sup_bound(residual_coeffs)
+"""
+Bound the derivatives of the MA equation in coefficient space, using the Chebyshev values of G and H on the grid.
+"""
+function step3_compute_MA_derivative_bound_v2(H_values::AbstractMatrix{<:Number}, G_values::AbstractMatrix{<:Number})
+    H_coeffs = cheb_lobatto_values_to_coeffs_2d(H_values)
+    G_coeffs = cheb_lobatto_values_to_coeffs_2d(G_values)
+
+    H_bound = chebyshev_coeff_sup_bound(H_coeffs)
+
+    Hx_coeffs = differentiate_coeffs_x(H_coeffs)
+    Hy_coeffs = differentiate_coeffs_y(H_coeffs)
+
+    Gx_coeffs = differentiate_coeffs_x(G_coeffs)
+    Gy_coeffs = differentiate_coeffs_y(G_coeffs)
+
+    MAx_coeffs = cheb_add(Gx_coeffs, cheb_mul2(G_coeffs, Hx_coeffs))
+    MAy_coeffs = cheb_add(Gy_coeffs, cheb_mul2(G_coeffs, Hy_coeffs))
+
+    exp_H_bound = exp(H_bound)
+
+    MAx_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAx_coeffs)
+    MAy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAy_coeffs)
+    dMA_bound = sqrt(MAx_bound^2 + MAy_bound^2)
 
     return (;
-        residual_bound,
-        residual_coeffs,
-        residual_values,
-        pack = vals.pack,
-        G_values = vals.G,
-        H_values = vals.H,
+        H_coeffs,
+        G_coeffs,
+        MAx_bound,
+        MAy_bound,
+        dMA_bound,
     )
 end
+
