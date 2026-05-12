@@ -31,6 +31,7 @@ end
 function compute_bound_residual_v2(coeffs_path::AbstractString; pdeg::Integer=240)
     step1 = step1_load_and_normalize_u0(coeffs_path)
     println("Step 1: Load and normalize u0 ... ok")
+    println("Step 1 guaranteed: $(all(isguaranteed, step1.normalized_coeffs))")
 
     step2 = step2_compute_GH_values_grid(step1.normalized_coeffs; pdeg)
     println("Step 2: Compute G and H values on the grid ... ok")

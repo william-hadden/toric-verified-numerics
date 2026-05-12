@@ -20,11 +20,11 @@ function cheb_diff_1d(coeffs::AbstractVector{<:Number})
     deriv = zeros(eltype(coeffs), N + 1)
     N == 0 && return deriv
 
-    deriv[N] = 2 * N * coeffs[N + 1]
+    deriv[N] = exact(2 * N) * coeffs[N + 1]
     for k in (N - 2):-1:1
-        deriv[k + 1] = deriv[k + 3] + 2 * (k + 1) * coeffs[k + 2]
+        deriv[k + 1] = deriv[k + 3] + exact(2 * (k + 1)) * coeffs[k + 2]
     end
-    deriv[1] = N == 1 ? coeffs[2] : coeffs[2] + deriv[3] / 2
+    deriv[1] = N == 1 ? coeffs[2] : coeffs[2] + deriv[3] / exact(2)
 
     return deriv
 end
@@ -35,7 +35,7 @@ Differentiate a coefficient array in the `x` variable on `[0,1]`.
 function differentiate_coeffs_x(coeffs::AbstractMatrix{<:Number})
     out = zeros(eltype(coeffs), size(coeffs))
     for j in axes(coeffs, 2)
-        out[:, j] .= 2 .* cheb_diff_1d(@view coeffs[:, j])
+        out[:, j] .= exact(2) .* cheb_diff_1d(@view coeffs[:, j])
     end
     return out
 end
@@ -46,7 +46,7 @@ Differentiate a coefficient array in the `y` variable on `[0,1]`.
 function differentiate_coeffs_y(coeffs::AbstractMatrix{<:Number})
     out = zeros(eltype(coeffs), size(coeffs))
     for i in axes(coeffs, 1)
-        out[i, :] .= -2 .* cheb_diff_1d(vec(@view coeffs[i, :]))
+        out[i, :] .= -exact(2) .* cheb_diff_1d(vec(@view coeffs[i, :]))
     end
     return out
 end
@@ -60,7 +60,7 @@ function build_derivative_pack(coeffs::AbstractMatrix{<:Number})
     uy = differentiate_coeffs_y(u0)
     uxx = differentiate_coeffs_x(ux)
     uyy = differentiate_coeffs_y(uy)
-    uxy = (differentiate_coeffs_y(ux) .+ differentiate_coeffs_x(uy)) ./ 2
+    uxy = (differentiate_coeffs_y(ux) .+ differentiate_coeffs_x(uy)) ./ exact(2)
     return (u0 = u0, ux = ux, uy = uy, uxx = uxx, uyy = uyy, uxy = uxy)
 end
 
@@ -69,12 +69,12 @@ Evaluate the scalar equation coefficients from equation `(34)` of Doran et al.,
 `Numerical Kähler-Einstein metric on the third del Pezzo`, at one point.
 """
 function eqn_coefficients_at_point(x, y)
-    c1a = -((x - 1) * (1 + x) * (x - y - 1) * (1 + x - y) * (y^2 - 1))
-    c1b = (x - 1) * (1 + x) * (-1 - y) * (1 - y) * (x - y - 1) * (1 + x - y)
-    c2xx = (x^2 - 1) * (x^2 - 2 * x * y + 2 * y^2 - 2)
-    c2yy = (y^2 - 1) * (2 * x^2 - 2 * x * y + y^2 - 2)
-    c2xy = -2 * (x^2 - 1) * (y^2 - 1)
-    c3 = 3 - 2 * (x^2 - x * y + y^2)
+    c1a = -((x - exact(1)) * (exact(1) + x) * (x - y - exact(1)) * (exact(1) + x - y) * (y^2 - exact(1)))
+    c1b = (x - exact(1)) * (exact(1) + x) * (-exact(1) - y) * (exact(1) - y) * (x - y - exact(1)) * (exact(1) + x - y)
+    c2xx = (x^2 - exact(1)) * (x^2 - exact(2) * x * y + exact(2) * y^2 - exact(2))
+    c2yy = (y^2 - exact(1)) * (exact(2) * x^2 - exact(2) * x * y + y^2 - exact(2))
+    c2xy = -exact(2) * (x^2 - exact(1)) * (y^2 - exact(1))
+    c3 = exact(3) - exact(2) * (x^2 - x * y + y^2)
     return (; c1a, c1b, c2xx, c2yy, c2xy, c3)
 end
 
@@ -227,7 +227,7 @@ function evaluate_raw_F_at_reference(coeffs::AbstractMatrix{<:Number}; ref_index
 
     eqn_coeffs = eqn_coefficients_at_point(x, y)
     G = eqn_coeffs.c1a * uxx * uyy + eqn_coeffs.c1b * (uxy^2) + eqn_coeffs.c2xx * uxx + eqn_coeffs.c2yy * uyy - eqn_coeffs.c2xy * uxy + eqn_coeffs.c3
-    H = 2 * u - 2 * (x * ux + y * uy)
+    H = exact(2) * u - exact(2) * (x * ux + y * uy)
 
     return log(G) + H
 end
@@ -237,13 +237,13 @@ Load `u0` and shift only its constant Chebyshev mode so the sampled `F` is near 
 """
 function step1_load_and_normalize_u0(coeffs_path::AbstractString; ref_index::Tuple{Int, Int} = DEFAULT_REF_INDEX)
     # raw_coeffs = load_coeffs_csv(coeffs_path)
-    raw_coeffs = Interval.(load_coeffs_csv(coeffs_path))
+    raw_coeffs = interval.(load_coeffs_csv(coeffs_path))
 
     # This sampled estimate of c is intentionally provisional and can later be
     # replaced by a more canonical computation of the residual constant.
     c_est = evaluate_raw_F_at_reference(raw_coeffs; ref_index)
 
-    normalized_coeffs = cheb_add_constant(raw_coeffs, -c_est / 2)
+    normalized_coeffs = cheb_add_constant(raw_coeffs, -c_est / exact(2))
     normalized_ref_value = evaluate_raw_F_at_reference(normalized_coeffs; ref_index)
     pack = build_derivative_pack(normalized_coeffs)
 
@@ -447,4 +447,3 @@ function step3_compute_MA_derivative_bound_v2(H_values::AbstractMatrix{<:Number}
         dMA_bound,
     )
 end
-

@@ -37,13 +37,14 @@ end
 """
 Return the one-dimensional Chebyshev-Lobatto points `cos(pi*k/N)` on `[-1,1]`.
 """
-cheb_grid(N::Integer) = cos.(pi .* collect(0:N) ./ N)
+cheb_grid(N::Integer) = cospi.(interval.(BigFloat.(collect(0:N))) ./ exact(BigFloat(N)))
 
 """
 Return the tensor-product grids on `[0,1]^2` used by the exported coefficients.
 """
 function make_grids(N::Integer)
-    xarr = reverse(0.5 .+ 0.5 .* cheb_grid(N))
+    half = exact(BigFloat(0.5))
+    xarr = reverse(half .+ half .* cheb_grid(N))
     yarr = copy(xarr)
     return xarr, yarr
 end
@@ -53,14 +54,14 @@ Return the values `T_0(z), ..., T_degree(z)` by the three-term recurrence.
 """
 function chebyshev_values(z, degree::Integer)
     degree >= 0 || error("Chebyshev degree must be nonnegative")
-    T = typeof(float(z)) # allows function to be called with float64 or BigFloat
+    T = typeof(z)
     values = Vector{T}(undef, degree + 1)
-    values[1] = one(T)
+    values[1] = one(z)
 
     if degree >= 1
-        values[2] = T(z)
+        values[2] = z
         for n in 2:degree
-            values[n + 1] = 2 * z * values[n] - values[n - 1]
+            values[n + 1] = exact(2) * z * values[n] - values[n - 1]
         end
     end
 
@@ -71,8 +72,8 @@ end
 Evaluate a tensor-product Chebyshev series at a single point `(x, y)` in `[0,1]^2`.
 """
 function evaluate_coeffs_at_point(coeffs::AbstractMatrix{<:Number}, x::Real, y::Real)
-    Tx = chebyshev_values(2 * x - 1, size(coeffs, 1) - 1)
-    Ty = chebyshev_values(1 - 2 * y, size(coeffs, 2) - 1)
+    Tx = chebyshev_values(exact(2) * x - exact(1), size(coeffs, 1) - 1)
+    Ty = chebyshev_values(exact(1) - exact(2) * y, size(coeffs, 2) - 1)
 
     # Initialise values as zero with type being the more general type of the types among
     # coeffs, Tx. Usually expect coeffs to be Interval{BigFloat} and Tx to be BigFloat.
