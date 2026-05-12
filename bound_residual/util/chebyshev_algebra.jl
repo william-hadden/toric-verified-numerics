@@ -134,10 +134,10 @@ function cheb_interval_recovery_matrix(N::Integer, ::Type{T}) where {T<:Interval
 
         matrix = copy(cheb_interval_eval_matrix(N, T))
         matrix .*= cheb_interval_constant(T, 2 // N)
-        matrix[1, :] ./= 2
-        matrix[end, :] ./= 2
-        matrix[:, 1] ./= 2
-        matrix[:, end] ./= 2
+        matrix[1, :] ./= exact(2)
+        matrix[end, :] ./= exact(2)
+        matrix[:, 1] ./= exact(2)
+        matrix[:, end] ./= exact(2)
         matrix
     end
 end
@@ -268,7 +268,7 @@ Applying
 in the `x` variable and again in the `y` variable produces four target modes.
 """
 function cheb_add_scaled_basis_product_2d!(out::AbstractMatrix{<:Number}, coeffs::AbstractMatrix{<:Number}, modex::Integer, modey::Integer, scale)
-    quarter_scale = scale / 4
+    quarter_scale = scale / exact(4)
 
     for j in axes(coeffs, 2), i in axes(coeffs, 1)
         contribution = quarter_scale * coeffs[i, j]

@@ -39,9 +39,11 @@ function compute_bound_residual_v2(coeffs_path::AbstractString; pdeg::Integer=24
 
     step3 = step3_compute_MA_derivative_bound_v2(step2.H, step2.G)
     println("Step 3: ||MAx||_∞ <= [$(inf(step3.MAx_bound)), $(sup(step3.MAx_bound))], " * "||MAy||_∞ <= [$(inf(step3.MAy_bound)), $(sup(step3.MAy_bound))]" * "||dMA||_∞ <= [$(inf(step3.dMA_bound)), $(sup(step3.dMA_bound))]")
+    println("Step 3 guaranteed: $(isguaranteed(step3.dMA_bound))")
 
     step4 = step4_compute_residual_bound_by_MVT(step3.H_coeffs, step3.G_coeffs, step3.dMA_bound)
     println("Step 4: ||E||_∞ <= $(step4.residual_bound)")
+    println("Step 4 guaranteed: $(isguaranteed(step4.residual_bound))")
 
     return (; step1, step2, step3, step4)
 end

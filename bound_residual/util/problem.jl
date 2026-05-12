@@ -377,9 +377,10 @@ end
 Bound `||G * exp(H) - 1||_∞` using the mean value theorem.
 """
 function step4_compute_residual_bound_by_MVT(H_coeffs::AbstractMatrix{<:Number}, G_coeffs::AbstractMatrix{<:Number}, dMA_bound)
-    MAp0 = evaluate_coeffs_at_point(G_coeffs, 0.5, 0.5) * exp(evaluate_coeffs_at_point(H_coeffs, 0.5, 0.5)) 
-    d = sqrt(1/4 + 1/4) 
-    residual = abs(MAp0-1) + dMA_bound * d
+    midpoint = interval(BigFloat(0.5))
+    MAp0 = evaluate_coeffs_at_point(G_coeffs, midpoint, midpoint) * exp(evaluate_coeffs_at_point(H_coeffs, midpoint, midpoint))
+    d = sqrt(interval(BigFloat(1)) / exact(4) + interval(BigFloat(1)) / exact(4))
+    residual = abs(MAp0 - exact(1)) + dMA_bound * d
     return (;
         residual_bound = residual
     )
@@ -419,24 +420,37 @@ end
 Bound the derivatives of the MA equation in coefficient space, using the Chebyshev values of G and H on the grid.
 """
 function step3_compute_MA_derivative_bound_v2(H_values::AbstractMatrix{<:Number}, G_values::AbstractMatrix{<:Number})
+    println("Computing H_coeffs...")
     H_coeffs = cheb_lobatto_values_to_coeffs_2d(H_values)
+    println("Computing G_coeffs...")
     G_coeffs = cheb_lobatto_values_to_coeffs_2d(G_values)
 
+    println("Computing H_bound...")
     H_bound = chebyshev_coeff_sup_bound(H_coeffs)
 
+    println("Computing Hx_coeffs...")
     Hx_coeffs = differentiate_coeffs_x(H_coeffs)
+    println("Computing Hy_coeffs...")
     Hy_coeffs = differentiate_coeffs_y(H_coeffs)
 
+    println("Computing Gx_coeffs...")
     Gx_coeffs = differentiate_coeffs_x(G_coeffs)
+    println("Computing Gy_coeffs...")
     Gy_coeffs = differentiate_coeffs_y(G_coeffs)
 
+    println("Computing MAx_coeffs...")
     MAx_coeffs = cheb_add(Gx_coeffs, cheb_mul2(G_coeffs, Hx_coeffs))
+    println("Computing MAy_coeffs...")
     MAy_coeffs = cheb_add(Gy_coeffs, cheb_mul2(G_coeffs, Hy_coeffs))
 
+    println("Computing exp_H_bound...")
     exp_H_bound = exp(H_bound)
 
+    println("Computing MAx_bound...")
     MAx_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAx_coeffs)
+    println("Computing MAy_bound...")
     MAy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAy_coeffs)
+    println("Computing dMA_bound...")
     dMA_bound = sqrt(MAx_bound^2 + MAy_bound^2)
 
     return (;
