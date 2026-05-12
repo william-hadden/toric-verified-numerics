@@ -408,7 +408,7 @@ function step2_compute_GH_values_grid(coeffs::AbstractMatrix{<:Number}; pdeg::In
             c.c2xy * pack.uxy[i,j] +
             c.c3
 
-        H[i,j] = 2 * pack.u[i,j] - 2 * (x * pack.ux[i,j] + y * pack.uy[i,j])
+        H[i,j] = exact(2) * pack.u[i,j] - exact(2) * (x * pack.ux[i,j] + y * pack.uy[i,j])
     end
 
     return (; G, H, pack)

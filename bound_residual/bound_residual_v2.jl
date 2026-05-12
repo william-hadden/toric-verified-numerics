@@ -35,6 +35,7 @@ function compute_bound_residual_v2(coeffs_path::AbstractString; pdeg::Integer=24
 
     step2 = step2_compute_GH_values_grid(step1.normalized_coeffs; pdeg)
     println("Step 2: Compute G and H values on the grid ... ok")
+    println("Step 2 guaranteed: $(all(isguaranteed, step2.G) && all(isguaranteed, step2.H))")
 
     step3 = step3_compute_MA_derivative_bound_v2(step2.H, step2.G)
     println("Step 3: ||MAx||_∞ <= [$(inf(step3.MAx_bound)), $(sup(step3.MAx_bound))], " * "||MAy||_∞ <= [$(inf(step3.MAy_bound)), $(sup(step3.MAy_bound))]" * "||dMA||_∞ <= [$(inf(step3.dMA_bound)), $(sup(step3.dMA_bound))]")

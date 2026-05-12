@@ -36,7 +36,7 @@ end
 
 cheb_interval_cache_key(N::Integer, ::Type{T}) where {T<:Interval} = (N, T, cheb_interval_precision(T))
 
-cheb_interval_constant(::Type{T}, x) where {T<:Interval} = convert(T, x)
+cheb_interval_constant(::Type{T}, x) where {T<:Interval} = interval(cheb_interval_endpoint_type(T)(x))
 
 """
 Trim exact zero rows and columns from the outer boundary of a coefficient array.
@@ -707,10 +707,10 @@ function cheb_diff_matrix(N::Integer, ::Type{T}=Float64) where {T<:Number}
 
     key = (N, T)
     return get!(_CHEB_DIFF_CACHE, key) do
-        z = [cospi(T(k) / T(N)) for k in 0:N]
+        z = [cospi(cheb_interval_constant(T, k // N)) for k in 0:N]
         c = ones(T, N+1)
-        c[1] = 2
-        c[end] = 2
+        c[1] = exact(2)
+        c[end] = exact(2)
         c .= c .* [isodd(k) ? -one(T) : one(T) for k in 0:N]
 
         D = zeros(T, N+1, N+1)
@@ -744,8 +744,8 @@ function build_lobatto_derivative_pack(coeffs::AbstractMatrix{<:Number}; pdeg::I
     Dxξ = cheb_diff_matrix(Nx, T)
     Dyη = cheb_diff_matrix(Ny, T)
 
-    Dx = 2 .* Dxξ
-    Dy = -2 .* Dyη
+    Dx = exact(2) .* Dxξ
+    Dy = -exact(2) .* Dyη
 
     ux  = Dx * u
     uy  = u * transpose(Dy)
@@ -754,11 +754,11 @@ function build_lobatto_derivative_pack(coeffs::AbstractMatrix{<:Number}; pdeg::I
     uyy = uy * transpose(Dy)
     uxy = Dx * uy
 
-    zξ = [cospi(T(k) / T(Nx)) for k in 0:Nx]
-    zη = [cospi(T(k) / T(Ny)) for k in 0:Ny]
+    zξ = [cospi(interval(BigFloat(k)) / exact(BigFloat(Nx))) for k in 0:Nx]
+    zη = [cospi(interval(BigFloat(k)) / exact(BigFloat(Ny))) for k in 0:Ny]
 
-    xarr = (zξ .+ 1) ./ 2
-    yarr = (1 .- zη) ./ 2
+    xarr = (zξ .+ exact(1)) ./ exact(2)
+    yarr = (exact(1) .- zη) ./ exact(2)
 
     return (; u, ux, uy, uxx, uyy, uxy, xarr, yarr, pdeg)
 end
