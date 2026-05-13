@@ -236,8 +236,7 @@ end
 Load `u0` and shift only its constant Chebyshev mode so the sampled `F` is near zero.
 """
 function step1_load_and_normalize_u0(coeffs_path::AbstractString; ref_index::Tuple{Int, Int} = DEFAULT_REF_INDEX)
-    # raw_coeffs = load_coeffs_csv(coeffs_path)
-    raw_coeffs = interval.(load_coeffs_csv(coeffs_path))
+    raw_coeffs = load_rational_coeffs_csv(coeffs_path)
 
     # This sampled estimate of c is intentionally provisional and can later be
     # replaced by a more canonical computation of the residual constant.

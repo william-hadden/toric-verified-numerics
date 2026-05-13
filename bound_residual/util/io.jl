@@ -1,33 +1,31 @@
 const DEFAULT_REF_INDEX = (2, 2)
 const REPO_ROOT = normpath(joinpath(@__DIR__, "..", ".."))
-const U0_PATH = joinpath(REPO_ROOT, "data", "happrox", "coeffs.csv")
+const U0_PATH = joinpath(REPO_ROOT, "data", "happrox", "coeffs-rational.csv")
 
 """
-Parse one numeric CSV entry as `BigFloat`.
+Parse one rational CSV entry as an `Interval{BigFloat}` at the active precision.
 """
-function parse_csv_number(entry::AbstractString)::BigFloat
-    cleaned = strip(replace(entry, '"' => ""))
-    return parse(BigFloat, cleaned)
+function parse_rational_interval(entry::AbstractString)::Interval{BigFloat}
+    numerator_entry, denominator_entry = split(entry, '/')
+    numerator = parse(BigInt, numerator_entry)
+    denominator = parse(BigInt, denominator_entry)
+
+    return interval(numerator) / interval(denominator)
 end
 
 """
-Load the coefficient matrix from the canonical CSV export.
+Load the rational coefficient matrix from the canonical CSV export.
 """
-function load_coeffs_csv(path::AbstractString)::Matrix{BigFloat}
-    lines = readlines(path)
-    isempty(lines) && error("Coefficient CSV is empty: $path")
+function load_rational_coeffs_csv(path::AbstractString)::Matrix{Interval{BigFloat}}
+    rows = Vector{Vector{Interval{BigFloat}}}()
 
-    rows = Vector{Vector{BigFloat}}(undef, length(lines))
-    expected_cols = nothing
-
-    for (i, line) in pairs(lines)
-        entries = split(chomp(line), ',')
-        expected_cols === nothing && (expected_cols = length(entries))
-        length(entries) == expected_cols || error("Row $i has $(length(entries)) columns; expected $expected_cols")
-        rows[i] = parse_csv_number.(entries)
+    open(path, "r") do io
+        for line in eachline(io)
+            push!(rows, parse_rational_interval.(split(line, ',')))
+        end
     end
 
-    coeffs = Matrix{BigFloat}(undef, length(rows), expected_cols)
+    coeffs = Matrix{Interval{BigFloat}}(undef, length(rows), length(rows[1]))
     for i in eachindex(rows)
         coeffs[i, :] .= rows[i]
     end

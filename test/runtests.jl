@@ -315,10 +315,10 @@ end
 end
 
 @testset "full real data interval coefficient multiplication" begin
-    coeffs = load_coeffs_csv(joinpath(@__DIR__, "..", "data", "happrox", "coeffs.csv"))
+    coeffs = load_rational_coeffs_csv(U0_PATH)
     @test size(coeffs) == (80, 80)
 
-    block = interval.(coeffs)
+    block = coeffs
 
     println("\nRunning full 80x80 rigorous comparison...")
 
