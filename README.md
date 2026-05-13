@@ -27,6 +27,9 @@ This installs the required packages declared in `Project.toml`, including:
 
 Download the file `coeffs-rational.csv.zip` from <https://drive.google.com/file/d/1lLDZO1lSbs4pZRi_1aa1WtDz13-kLCH4/view?usp=sharing> and put it in the folder `data/happrox`.
 
+Extract the archive in place before running the residual-bound code.
+The active data file is the extracted `data/happrox/coeffs-rational.csv`.
+
 ## Running scripts
 
 Use:
