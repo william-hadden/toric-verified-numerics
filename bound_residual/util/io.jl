@@ -1,6 +1,9 @@
+import JSON
+
 const DEFAULT_REF_INDEX = (2, 2)
 const REPO_ROOT = normpath(joinpath(@__DIR__, "..", ".."))
 const U0_PATH = joinpath(REPO_ROOT, "data", "happrox", "coeffs-rational.csv")
+const VERIFIED_BOUNDS_PATH = joinpath(REPO_ROOT, "data", "verified_bounds.json")
 
 """
 Parse one rational CSV entry as an `Interval{BigFloat}` at the active precision.
@@ -31,6 +34,57 @@ function load_rational_coeffs_csv(path::AbstractString)::Matrix{Interval{BigFloa
     end
     return coeffs
 end
+
+"""
+Read one top-level bound dictionary from the verified bounds JSON file.
+"""
+function read_bound(key::AbstractString; path::AbstractString = VERIFIED_BOUNDS_PATH)
+    return parse_bound_value(JSON.parsefile(path)[key])
+end
+
+read_bound(key::Symbol; path::AbstractString = VERIFIED_BOUNDS_PATH) = read_bound(String(key); path)
+
+parse_bound_value(bounds::AbstractDict) = Dict(key => parse_bound_value(value) for (key, value) in bounds)
+
+parse_bound_value(bound::Real) = Interval{BigFloat}(interval(bound))
+
+function parse_bound_value(bound::AbstractString)::Interval{BigFloat}
+    lower = setrounding(BigFloat, RoundDown) do
+        parse(BigFloat, bound)
+    end
+    upper = setrounding(BigFloat, RoundUp) do
+        parse(BigFloat, bound)
+    end
+    return interval(lower, upper)
+end
+
+serialize_bound_value(bound::Interval) = string(sup(bound))
+serialize_bound_value(bound::Real) = serialize_bound_value(Interval{BigFloat}(interval(bound)))
+serialize_bound_value(bounds::NamedTuple) = Dict(String(key) => serialize_bound_value(value) for (key, value) in pairs(bounds))
+serialize_bound_value(bounds::AbstractDict) = Dict(String(key) => serialize_bound_value(value) for (key, value) in bounds)
+
+"""
+Write one entry into a top-level bound dictionary.
+"""
+function write_bound_entry(group_key::AbstractString, value_key::AbstractString, value; path::AbstractString = VERIFIED_BOUNDS_PATH)
+    bounds = isfile(path) ? JSON.parsefile(path) : Dict{String,Any}()
+    group = get!(bounds, group_key) do
+        Dict{String,Any}()
+    end
+    group isa AbstractDict || error("Bound '$group_key' is not a dictionary")
+    group[value_key] = serialize_bound_value(value)
+
+    mkpath(dirname(path))
+    open(path, "w") do io
+        JSON.print(io, bounds, 4)
+        println(io)
+    end
+
+    return nothing
+end
+
+write_bound_entry(group_key::Symbol, value_key::Symbol, value; path::AbstractString = VERIFIED_BOUNDS_PATH) =
+    write_bound_entry(String(group_key), String(value_key), value; path)
 
 """
 Return the one-dimensional Chebyshev-Lobatto points `cos(pi*k/N)` on `[-1,1]`.

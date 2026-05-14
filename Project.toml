@@ -1,10 +1,12 @@
 [deps]
 FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
 IntervalArithmetic = "d1acc4aa-44c8-5952-acd4-ba5d80a2a253"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 
 [compat]
 FFTW = "1"
 IntervalArithmetic = "1"
+JSON = "1"
 julia = "1.10"
 
 [extras]

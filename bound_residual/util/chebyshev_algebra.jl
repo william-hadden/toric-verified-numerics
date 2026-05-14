@@ -56,16 +56,6 @@ function cheb_trim_exact(coeffs::AbstractMatrix{<:Number})
 end
 
 """
-Return the `1 x 1` coefficient array of a constant series.
-"""
-function cheb_constant(c)
-    T = promote_type(typeof(c), Float64)
-    coeffs = zeros(T, 1, 1)
-    coeffs[1, 1] = c
-    return coeffs
-end
-
-"""
 Pad a coefficient array with zeros up to the requested bidegree.
 """
 function cheb_pad(coeffs::AbstractMatrix{<:Number}, degx::Integer, degy::Integer)
@@ -76,25 +66,6 @@ function cheb_pad(coeffs::AbstractMatrix{<:Number}, degx::Integer, degy::Integer
     out[1:size(coeffs, 1), 1:size(coeffs, 2)] .= coeffs
     return out
 end
-
-"""
-Return the full product bidegree for multiplying two coefficient arrays.
-"""
-full_product_degree(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number}) =
-    (size(A, 1) + size(B, 1) - 2, size(A, 2) + size(B, 2) - 2)
-
-"""
-Pad a coefficient array to the full product bidegree of `A * B`.
-"""
-function pad_to_product_degree(coeffs::AbstractMatrix{<:Number}, A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number})
-    degx, degy = full_product_degree(A, B)
-    return cheb_pad(coeffs, degx, degy)
-end
-
-"""
-Take coefficientwise absolute values.
-"""
-cheb_abs_coeffs(A::AbstractMatrix{<:Real}) = abs.(A)
 
 """
 Return the cached interval cosine evaluation matrix for Lobatto nodes of order `N`.
@@ -162,38 +133,6 @@ function cheb_add(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number})
 end
 
 """
-Subtract two dense coefficient arrays after zero-padding to the common bidegree.
-"""
-function cheb_sub(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number})
-    degx = max(size(A, 1), size(B, 1)) - 1
-    degy = max(size(A, 2), size(B, 2)) - 1
-    T = promote_type(eltype(A), eltype(B))
-    out = cheb_zero(degx, degy, T)
-
-    for j in axes(A, 2), i in axes(A, 1)
-        out[i, j] += A[i, j]
-    end
-    for j in axes(B, 2), i in axes(B, 1)
-        out[i, j] -= B[i, j]
-    end
-
-    return cheb_trim_exact(out)
-end
-
-"""
-Scale a dense coefficient array by a scalar.
-"""
-function cheb_scale(A::AbstractMatrix{<:Number}, c)
-    T = promote_type(eltype(A), typeof(c))
-    out = Matrix{T}(undef, size(A)...)
-    for I in eachindex(A)
-        out[I] = A[I] * c
-    end
-    return cheb_trim_exact(out)
-end
-
-
-"""
 Add a scalar to the constant mode of a coefficient array.
 """
 function cheb_add_constant(A::AbstractMatrix{<:Number}, c)
@@ -205,60 +144,8 @@ function cheb_add_constant(A::AbstractMatrix{<:Number}, c)
 end
 
 """
-Add `scale * T_mode * coeffs` to a one-dimensional output array.
-
-If `coeffs` represents `sum_{n >= 0} c_n T_n`, this adds
-`scale * sum_{n >= 0} c_n T_mode T_n`
-to `out`.
-
-The caller must provide `out` with enough room for the full product. If
-`coeffs` has length `N + 1`, then `out` must have length at least `mode + N + 1`,
-since the highest target mode is `T_{mode + N}`.
-
-The update uses the product identity
-`T_m(x) T_n(x) = (T_{m+n}(x) + T_{|m-n|}(x)) / 2`,
-so each coefficient contributes half to mode `m + n` and half to mode `|m - n|`, see DLMF 18.18.21.
-"""
-function cheb_add_scaled_basis_product_1d!(out::AbstractVector{<:Number}, coeffs::AbstractVector{<:Number}, mode::Integer, scale)
-    half_scale = scale / 2
-
-    for j in eachindex(coeffs) # Can potentially add @inbounds for speed gain
-        contribution = half_scale * coeffs[j]
-        out[j + mode] += contribution
-        out[abs((j - 1) - mode) + 1] += contribution
-    end
-
-    return out
-end
-
-"""
-Multiply two one-dimensional Chebyshev series in coefficient space.
-"""
-function cheb_mul1(a::AbstractVector{<:Number}, b::AbstractVector{<:Number})
-    if length(a) <= length(b)
-        small = a
-        large = b
-    else
-        small = b
-        large = a
-    end
-
-    T = promote_type(eltype(a), eltype(b))
-    out = zeros(T, length(a) + length(b) - 1)
-
-    for i in eachindex(small)
-        coeff = small[i]
-        coeff_is_exact_zero(coeff) && continue
-        cheb_add_scaled_basis_product_1d!(out, large, i - 1, coeff)
-    end
-
-    return cheb_trim_exact(reshape(out, :, 1))[:, 1]
-end
-
-"""
 Add `scale * T_modex * T_modey * coeffs` to a two-dimensional output array.
 
-This is the tensor-product analogue of `cheb_add_scaled_basis_product_1d!`.
 The caller must provide `out` with enough room for the full tensor-product
 update. If `coeffs` has size `(Nx + 1, Ny + 1)`, then `out` must have size at
 least `(modex + Nx + 1, modey + Ny + 1)`.
@@ -317,37 +204,6 @@ function cheb_dct1(v::AbstractVector{<:Real})
         total = data[1] + ((-one(T))^k) * data[end]
         for j in 1:(N - 1)
             total += 2 * data[j + 1] * cospi(j * k / N)
-        end
-        out[k + 1] = total
-    end
-
-    return out
-end
-
-"""
-Apply the unnormalized DCT-I to an interval vector.
-
-This uses the defining cosine sum directly so every arithmetic operation is
-carried out in interval arithmetic and the output rigorously encloses the true
-transform.
-"""
-function cheb_dct1_interval(v::AbstractVector{<:Interval})
-    n = length(v)
-    n >= 1 || error("Expected a nonempty vector")
-
-    T = eltype(v)
-    out = zeros(T, n)
-
-    if n == 1
-        out[1] = v[1]
-        return out
-    end
-
-    N = n - 1
-    for k in 0:N
-        total = v[1] + (-1)^k * v[end]
-        for j in 1:(N - 1)
-            total += 2 * v[j + 1] * cospi(interval((j * k) // N))
         end
         out[k + 1] = total
     end
@@ -599,95 +455,6 @@ function cheb_mul2(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number}; met
     else
         error("Unknown Chebyshev multiplication method: $method")
     end
-end
-
-"""
-Multiply a tensor-product Chebyshev series by the coordinate `x` on `[0,1]^2`.
-"""
-function cheb_mul_x(A::AbstractMatrix{<:Number})
-    out = zeros(eltype(A), size(A, 1) + 1, size(A, 2))
-
-    for j in axes(A, 2), i in axes(A, 1)
-        coeff = A[i, j]
-        half_contribution = coeff / 2
-        quarter_contribution = coeff / 4
-
-        out[i, j] += half_contribution
-        out[i + 1, j] += quarter_contribution
-        out[abs((i - 1) - 1) + 1, j] += quarter_contribution
-    end
-
-    return cheb_trim_exact(out)
-end
-
-"""
-Multiply a tensor-product Chebyshev series by the coordinate `y` on `[0,1]^2`.
-"""
-function cheb_mul_y(A::AbstractMatrix{<:Number})
-    out = zeros(eltype(A), size(A, 1), size(A, 2) + 1)
-
-    for j in axes(A, 2), i in axes(A, 1)
-        coeff = A[i, j]
-        half_contribution = coeff / 2
-        quarter_contribution = coeff / 4
-
-        out[i, j] += half_contribution
-        out[i, j + 1] -= quarter_contribution
-        out[i, abs((j - 1) - 1) + 1] -= quarter_contribution
-    end
-
-    return cheb_trim_exact(out)
-end
-
-"""
-Return the scalar coefficients of the degree-`p` Taylor polynomial of `exp`.
-"""
-function exp_taylor_coeffs(p::Integer)::Vector{Float64}
-    p >= 0 || error("Taylor degree must be nonnegative")
-    coeffs = Vector{Float64}(undef, p + 1)
-    coeffs[1] = 1.0
-
-    for k in 1:p
-        coeffs[k + 1] = coeffs[k] / k
-    end
-
-    return coeffs
-end
-
-"""
-Evaluate an ordinary one-variable polynomial `q(z)` at a tensor-product
-Chebyshev series `H(x,y)` by Horner's rule.
-
-If `coeffs = [a_0, ..., a_p]`, define the scalar polynomial
-`q(z) = sum_{k=0}^p a_k z^k`.
-This function returns the coefficient array of the two-variable series
-`q(H(x,y)) = sum_{k=0}^p a_k H(x,y)^k`.
-
-The computation uses the nested identity
-`q(H) = a_0 + H(a_1 + H(a_2 + ... + H(a_{p-1} + H a_p)...))`,
-so the polynomial is one-dimensional in the formal variable `z`, while `H`
-itself is a tensor-product Chebyshev series in `(x,y)`.
-
-The code starts from the top coefficient `a_p` and iterates
-`acc <- a_k + H * acc`.
-Here `H * acc` is multiplication in the coefficient algebra of
-two-variable Chebyshev series, implemented by `cheb_mul2`, and adding `a_k`
-means adding `a_k T_0(x) T_0(y)` to the constant mode.
-
-This is the usual Horner identity for polynomial evaluation, applied in the
-ring of tensor-product Chebyshev series.
-"""
-function cheb_horner_scalar_poly(H::AbstractMatrix{<:Number}, coeffs::AbstractVector{<:Real})
-    isempty(coeffs) && error("Expected at least one scalar coefficient")
-    acc = cheb_constant(coeffs[end])
-
-    for k in (length(coeffs) - 1):-1:1
-        # Horner step: replace the current partial polynomial r(H) by
-        # a_{k-1} + H * r(H).
-        acc = cheb_add_constant(cheb_mul2(H, acc), coeffs[k])
-    end
-
-    return acc
 end
 
 """
