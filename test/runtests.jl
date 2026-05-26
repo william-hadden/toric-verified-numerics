@@ -5,8 +5,13 @@ using Test
 using Random
 using IntervalArithmetic
 
+test_filter = isempty(ARGS) ? "all" : ARGS[1]
+
 include(joinpath(@__DIR__, "..", "bound_residual", "util", "io.jl"))
 include(joinpath(@__DIR__, "..", "bound_residual", "util", "chebyshev_algebra.jl"))
+include(joinpath(@__DIR__, "..", "bound_metric", "bound_inverse.jl"))
+include(joinpath(@__DIR__, "..", "bound_metric", "bound_ricci.jl"))
+include(joinpath(@__DIR__, "metric_geometry_test_helpers.jl"))
 
 function pad_to_common_size(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number})
     degx = max(size(A, 1), size(B, 1)) - 1
@@ -37,6 +42,10 @@ function interval_coeffs_overlap(A::AbstractMatrix{<:Interval}, B::AbstractMatri
     return true
 end
 
+interval_overlaps(A::Interval, B::Interval) = inf(A) <= sup(B) && inf(B) <= sup(A)
+interval_endpoints_approx(A::Interval, B::Interval; rtol = big"1e-25", atol = big"1e-25") =
+    isapprox(inf(A), inf(B); rtol, atol) && isapprox(sup(A), sup(B); rtol, atol)
+
 max_interval_width(A::AbstractMatrix{<:Interval}) = maximum(sup(x) - inf(x) for x in A)
 
 intervalize(A::AbstractMatrix{<:Real}) = interval.(A)
@@ -46,6 +55,20 @@ function interval_methods_enclose_direct(A::AbstractMatrix{<:Interval}, B::Abstr
     candidate = cheb_mul2(A, B; method = method)
     return interval_coeffs_enclose(direct, candidate)
 end
+
+if test_filter in ("all", "quotient")
+    include(joinpath(@__DIR__, "quotient_tests.jl"))
+end
+
+if test_filter in ("all", "ricci")
+    include(joinpath(@__DIR__, "ricci_tests.jl"))
+end
+
+if test_filter in ("all", "inverse")
+    include(joinpath(@__DIR__, "inverse_tests.jl"))
+end
+
+if test_filter in ("all", "cheb")
 
 @testset "2D Chebyshev multiplication via DCT" begin
     @testset "simple exact cases" begin
@@ -402,3 +425,5 @@ end
         println("  max ratio:    ", maximum(width_ratios))
     end
 end
+
+end # test_filter in ("all", "cheb")

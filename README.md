@@ -42,10 +42,24 @@ so scripts run inside the project environment.
 
 ## Tests
 
-Run tests with:
+Run the full test suite with:
 
 ```bash
 julia --project=. test/runtests.jl
 ```
+
+The test runner also accepts a filter argument for focused runs:
+
+```bash
+julia --project=. test/runtests.jl quotient
+julia --project=. test/runtests.jl ricci
+julia --project=. test/runtests.jl inverse
+julia --project=. test/runtests.jl cheb
+```
+
+- `quotient` checks the coefficient-space quotient differentiation formula in cases where `D = 1`.
+- `ricci` checks Ricci assembly against a polynomial inverse metric with known exact answer.
+- `inverse` runs a small rigorous end-to-end inverse/Ricci certificate on embedded test data.
+- `cheb` runs the Chebyshev multiplication tests.
 
 ## TODO

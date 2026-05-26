@@ -1,0 +1,132 @@
+"""
+Evaluate T_0(x), ..., T_N(x) on an interval x using recurrence.
+"""
+function cheb_values_on_interval(x, N::Integer)
+    T = Vector{typeof(x)}(undef, N + 1)
+
+    T[1] = one(x)          # T_0
+    if N >= 1
+        T[2] = x           # T_1
+    end
+
+    for k in 2:N
+        T[k + 1] = 2 * x * T[k] - T[k - 1]
+    end
+
+    return T
+end
+
+"""
+Evaluate a 2D Chebyshev coefficient array on an interval box
+xbox by ybox.
+
+coeffs[i,j] corresponds to T_{i-1}(x) T_{j-1}(y).
+"""
+function eval_cheb_2d_interval(coeffs::AbstractMatrix, xbox, ybox)
+    Nx, Ny = size(coeffs)
+
+    Tx = cheb_values_on_interval(xbox, Nx - 1)
+    Ty = cheb_values_on_interval(ybox, Ny - 1)
+
+    s = zero(coeffs[1, 1] * Tx[1] * Ty[1])
+
+    for j in 1:Ny, i in 1:Nx
+        s += coeffs[i, j] * Tx[i] * Ty[j]
+    end
+
+    return s
+end
+
+"""
+Split [-1,1] into n equal interval pieces.
+"""
+function subdivide_minus_one_one(n::Integer)
+    xs = range(big"-1", big"1"; length = n + 1)
+
+    return [
+        interval(BigFloat(xs[k]), BigFloat(xs[k + 1]))
+        for k in 1:n
+    ]
+end
+
+function affine_box_to_unit(box)
+    l = inf(box)
+    r = sup(box)
+    a = (l + r) / 2
+    b = (r - l) / 2
+    return interval(a), interval(b)
+end
+
+function cheb_shifted_power_coeffs(n::Integer, a, b)
+    T = Vector{Vector{typeof(a)}}(undef, n + 1)
+
+    T[1] = [one(a)]
+
+    if n >= 1
+        T[2] = [a, b]
+    end
+
+    for k in 2:n
+        Tk = T[k]
+        Tkm1 = T[k - 1]
+
+        xTk = zeros(typeof(a), length(Tk) + 1)
+
+        for i in eachindex(Tk)
+            xTk[i] += a * Tk[i]
+            xTk[i + 1] += b * Tk[i]
+        end
+
+        Tkp1 = 2 .* xTk
+
+        for i in eachindex(Tkm1)
+            Tkp1[i] -= Tkm1[i]
+        end
+
+        T[k + 1] = Tkp1
+    end
+
+    return T
+end
+
+function local_power_coeffs_cheb_2d(coeffs::AbstractMatrix, xbox, ybox)
+    coeffs = intervalize_coefficients(coeffs)
+
+    Nx, Ny = size(coeffs)
+
+    ax, bx = affine_box_to_unit(xbox)
+    ay, by = affine_box_to_unit(ybox)
+
+    Tx = cheb_shifted_power_coeffs(Nx - 1, ax, bx)
+    Ty = cheb_shifted_power_coeffs(Ny - 1, ay, by)
+
+    local2 = zeros(typeof(coeffs[1, 1]), Nx, Ny)
+
+    for j in 1:Ny, i in 1:Nx
+        cij = coeffs[i, j]
+        px = Tx[i]
+        py = Ty[j]
+
+        for q in eachindex(py), p in eachindex(px)
+            local2[p, q] += cij * px[p] * py[q]
+        end
+    end
+
+    return local2
+end
+
+function local_coeff_sum_centered_enclosure_cheb_2d(coeffs::AbstractMatrix, xbox, ybox)
+    local2 = local_power_coeffs_cheb_2d(coeffs, xbox, ybox)
+
+    Nx, Ny = size(local2)
+
+    c00 = local2[1, 1]
+    tail = zero(abs(c00))
+
+    for q in 1:Ny, p in 1:Nx
+        p == 1 && q == 1 && continue
+        tail += abs(local2[p, q])
+    end
+
+    return c00 + symmetric_interval(tail)
+end
