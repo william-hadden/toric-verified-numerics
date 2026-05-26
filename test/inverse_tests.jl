@@ -41,7 +41,7 @@
         @test sup(real_inverse_result.step4.u22_bound) <= 1.1 * sup(inverse_result.step4.u22_bound)
         @test inf(real_inverse_result.step4.D_lower) >= 0.9 * inf(inverse_result.step4.D_lower)
 
-        derivatives = compute_second_derivatives(inverse_result.step1.normalized_coeffs)
+        derivatives = compute_second_derivatives(inverse_result.step1)
         coefficient_space = build_inverse_metric(derivatives; method = :coefficient_space)
         real_space = build_inverse_metric(derivatives; method = :real_space)
         @test interval_coeffs_overlap(coefficient_space.A11, real_space.A11)

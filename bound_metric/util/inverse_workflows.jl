@@ -3,9 +3,9 @@ To speed up computation, approximate the polynomial to low degree, putting const
 """
 function lower_degree_approximation(coeffs_path::AbstractString, pdeg::Integer)
     step1_progress = start_progress("Step 1: Load and truncate u0", 1)
-    step1 = step1_load_and_normalize_u0(coeffs_path)
+    step1 = load_metric_coeffs_csv(coeffs_path)
 
-    u_truncated = absorb_tail_into_constant(step1.raw_coeffs, pdeg)
+    u_truncated = absorb_tail_into_constant(step1, pdeg)
     finish_progress!(step1_progress)
     println("Step 1: Load and truncate u0 ... ok")
 
@@ -35,13 +35,13 @@ function subdivide_and_bound_rigorous_local(
     pdeg::Integer,
     num_subdivisions::Integer,
 )
-    step1_progress = start_progress("Step 1: Load and normalize u0", 1)
-    step1 = step1_load_and_normalize_u0(coeffs_path)
+    step1_progress = start_progress("Step 1: Load u0", 1)
+    step1 = load_metric_coeffs_csv(coeffs_path)
     finish_progress!(step1_progress)
-    println("Step 1: Load and normalize u0 ... ok")
+    println("Step 1: Load u0 ... ok")
 
     step2_progress = start_progress("Step 2: Compute full second derivatives", 1)
-    step2 = compute_second_derivatives(step1.normalized_coeffs)
+    step2 = compute_second_derivatives(step1)
     finish_progress!(step2_progress)
     println("Step 2: Compute full second derivatives ... ok")
 
@@ -85,13 +85,13 @@ function subdivide_and_bound_rigorous(
     pdeg::Integer,
     num_subdivisions::Integer,
 )
-    step1_progress = start_progress("Step 1: Load and normalize u0", 1)
-    step1 = step1_load_and_normalize_u0(coeffs_path)
+    step1_progress = start_progress("Step 1: Load u0", 1)
+    step1 = load_metric_coeffs_csv(coeffs_path)
     finish_progress!(step1_progress)
-    println("Step 1: Load and normalize u0 ... ok")
+    println("Step 1: Load u0 ... ok")
 
     step2_progress = start_progress("Step 2: Compute full second derivatives", 1)
-    step2 = compute_second_derivatives(step1.normalized_coeffs)
+    step2 = compute_second_derivatives(step1)
     finish_progress!(step2_progress)
     println("Step 2: Compute full second derivatives ... ok")
 
@@ -126,13 +126,13 @@ function subdivide_and_bound_rigorous2(
     pdeg::Integer,
     num_subdivisions::Integer,
 )
-    step1_progress = start_progress("Step 1: Load and normalize u0", 1)
-    step1 = step1_load_and_normalize_u0(coeffs_path)
+    step1_progress = start_progress("Step 1: Load u0", 1)
+    step1 = load_metric_coeffs_csv(coeffs_path)
     finish_progress!(step1_progress)
-    println("Step 1: Load and normalize u0 ... ok")
+    println("Step 1: Load u0 ... ok")
 
     step2_progress = start_progress("Step 2: Compute full second derivatives", 1)
-    step2 = compute_second_derivatives(step1.normalized_coeffs)
+    step2 = compute_second_derivatives(step1)
     finish_progress!(step2_progress)
     println("Step 2: Compute full second derivatives ... ok")
 
