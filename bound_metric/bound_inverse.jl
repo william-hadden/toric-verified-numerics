@@ -14,83 +14,63 @@ include(joinpath(@__DIR__, "util", "inverse_bounds.jl"))
 include(joinpath(@__DIR__, "util", "inverse_truncation.jl"))
 include(joinpath(@__DIR__, "util", "chebyshev_interval_evaluation.jl"))
 include(joinpath(@__DIR__, "util", "inverse_subdivision_bounds.jl"))
-include(joinpath(@__DIR__, "util", "inverse_workflows.jl"))
 
-"""
-Bound the inverse metric `u^{ij}` using interval arithmetic and coefficient
-sup bounds.
-"""
-function compute_bound_inverse(coeffs_path::AbstractString)
+
+function subdivide_and_bound_rigorous_local(
+    coeffs_path::AbstractString,
+    pdeg::Integer,
+    num_subdivisions::Integer,
+)
     step1_progress = start_progress("Step 1: Load u0", 1)
     step1 = load_metric_coeffs_csv(coeffs_path)
     finish_progress!(step1_progress)
     println("Step 1: Load u0 ... ok")
 
-    step2_progress = start_progress("Step 2: Compute second derivatives", 1)
+    step2_progress = start_progress("Step 2: Compute full second derivatives", 1)
     step2 = compute_second_derivatives(step1)
     finish_progress!(step2_progress)
-    println("Step 2: Compute second derivatives ... ok")
+    println("Step 2: Compute full second derivatives ... ok")
 
-    step3_progress = start_progress("Step 3: Chebyshev products", 74)
-    step3 = build_inverse_metric(step2; progress = step3_progress)
+    step3_progress = start_progress("Step 3: Build full inverse metric coefficients", 74)
+    step3 = build_inverse_metric_coeffs(step2; progress = step3_progress)
     finish_progress!(step3_progress)
-    println("Step 3: Build inverse metric coefficient arrays ... ok")
+    println("Step 3: Build full inverse metric coefficient arrays ... ok")
 
-    step4_progress = start_progress("Step 4: Coefficient bounds", 1)
-    step4 = compute_inverse_bound_by_coefficient_bounds(step3)
+    println("Step 4: Starting local subdivision bounds ...")
+    step4_progress = start_progress("Step 4: Local subdivision boxes", num_subdivisions * num_subdivisions)
+    subdivision_time = @elapsed begin
+        step4 = compute_inverse_bound_by_local_subdivision_truncated(
+            step3;
+            pdeg = pdeg,
+            nx = num_subdivisions,
+            ny = num_subdivisions,
+            progress = step4_progress,
+        )
+        global_step4 = step4
+    end
     finish_progress!(step4_progress)
-    println("Step 4: Bound inverse metric entries by coefficient sums ... ok")
-    print_inverse_bound_summary(step4)
 
-    return (; step1, step2, step3, step4)
-end
+    println("Step 4: Local subdivision bounds ... ok")
+    print_truncated_subdivision_inverse_bound_summary(global_step4)
+    println()
+    println("Subdivision step time: $(round(subdivision_time; digits = 3)) seconds")
 
-"""
-Bound the inverse metric `u^{ij}` using the real-space inverse metric builder.
-"""
-function compute_bound_inverse_real(coeffs_path::AbstractString)
-    step1_progress = start_progress("Step 1: Load u0", 1)
-    step1 = load_metric_coeffs_csv(coeffs_path)
-    finish_progress!(step1_progress)
-    println("Step 1: Load u0 ... ok")
-
-    step2_progress = start_progress("Step 2: Compute second derivatives", 1)
-    step2 = compute_second_derivatives(step1)
-    finish_progress!(step2_progress)
-    println("Step 2: Compute second derivatives ... ok")
-
-    step3_progress = start_progress("Step 3: Real-space products", 28)
-    step3 = build_inverse_metric(step2; method = :real_space, progress = step3_progress)
-    finish_progress!(step3_progress)
-    println("Step 3: Build inverse metric coefficient arrays in real space ... ok")
-
-    step4_progress = start_progress("Step 4: Coefficient bounds", 1)
-    step4 = compute_inverse_bound_by_coefficient_bounds(step3)
-    finish_progress!(step4_progress)
-    println("Step 4: Bound inverse metric entries by coefficient sums ... ok")
-    print_inverse_bound_summary(step4)
-
-    return (; step1, step2, step3, step4)
+    return (;
+        step1,
+        step2,
+        step3,
+        step4 = global_step4,
+        subdivision_time,
+        pdeg,
+        num_subdivisions,
+    )
 end
 
 function main()
     setprecision(BigFloat, 100)
-    compute_bound_inverse(METRIC_U0_PATH)
-    # compute_bound_inverse_real(METRIC_U0_PATH)
-    lower_degree_approximation(METRIC_U0_PATH,10)
-
-    # pdeg > 0 means truncate
-    # subdivide_and_bound_rigorous2(METRIC_U0_PATH, 10, 8)
-
-    # pdeg <= 0 means use full coefficients
-    # subdivide_and_bound_rigorous(METRIC_U0_PATH, 0, 8)
-
-    # try to avoid interval blow up
     subdivide_and_bound_rigorous_local(METRIC_U0_PATH, 20, 8);
-    # subdivide_and_bound_rigorous_local(METRIC_U0_PATH, 60, 8)
-
 end
-main()
-# if abspath(PROGRAM_FILE) == @__FILE__
-#     main()
-# end
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    main()
+end

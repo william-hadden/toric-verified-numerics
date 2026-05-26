@@ -17,53 +17,12 @@ include(joinpath(@__DIR__, "util", "inverse_subdivision_bounds.jl"))
 include(joinpath(@__DIR__, "util", "ricci_bounds.jl"))
 
 """
-Bound the `C^0` norm of the Ricci tensor using the factored inverse metric
-coefficient arrays.
-"""
-ricci_numerator_progress_steps(method::Symbol) =
-    method === :real_space ? 15 :
-    method === :coefficient_space || method === :truncated_coefficient_space ? 50 :
-    50
-
-function bound_ricci(coeffs_path::AbstractString; numerator_method::Symbol = :real_space, pdeg::Integer = 0)
-    step1_progress = start_progress("Step 1: Load u0", 1)
-    step1 = load_metric_coeffs_csv(coeffs_path)
-    finish_progress!(step1_progress)
-    println("Step 1: Load u0 ... ok")
-
-    step2_progress = start_progress("Step 2: Compute second derivatives", 1)
-    step2 = compute_second_derivatives(step1)
-    finish_progress!(step2_progress)
-    println("Step 2: Compute second derivatives ... ok")
-
-    step3_progress = start_progress("Step 3: Chebyshev products", 74)
-    step3 = build_inverse_metric(step2; progress = step3_progress)
-    finish_progress!(step3_progress)
-    println("Step 3: Build inverse metric coefficient arrays ... ok")
-
-    step4_progress = start_progress("Step 4: Coefficient bounds", 1)
-    step4 = compute_inverse_bound_by_coefficient_bounds(step3)
-    finish_progress!(step4_progress)
-    println("Step 4: Bound inverse metric entries by coefficient sums ... ok")
-
-    step5_progress = start_progress("Step 5: Ricci numerator products", ricci_numerator_progress_steps(numerator_method))
-    step5 = compute_ricci_bound_from_inverse_coeffs(step3, step4; progress = step5_progress, numerator_method, pdeg)
-    finish_progress!(step5_progress)
-    println("Step 5: Bound Ricci tensor by coefficient sums ... ok")
-    print_ricci_bound_summary(step5)
-
-    return (; step1, step2, step3, step4, step5)
-end
-
-"""
 Bound the `C^0` norm of the Ricci tensor using truncated local subdivision.
 """
 function bound_ricci_subdivision_local(
     coeffs_path::AbstractString,
     pdeg::Integer,
     num_subdivisions::Integer;
-    inverse_build_method::Symbol = :coefficient_space,
-    numerator_method::Symbol = :truncated_coefficient_space,
 )
     step1_progress = start_progress("Step 1: Load u0", 1)
     step1 = load_metric_coeffs_csv(coeffs_path)
@@ -75,13 +34,13 @@ function bound_ricci_subdivision_local(
     finish_progress!(step2_progress)
     println("Step 2: Compute second derivatives ... ok")
 
-    step3_progress = start_progress("Step 3: Build inverse metric coefficients", inverse_build_method === :real_space ? 28 : 74)
-    step3 = build_inverse_metric(step2; method = inverse_build_method, progress = step3_progress)
+    step3_progress = start_progress("Step 3: Build inverse metric coefficients", 74)
+    step3 = build_inverse_metric_coeffs(step2; progress = step3_progress)
     finish_progress!(step3_progress)
     println("Step 3: Build inverse metric coefficient arrays ... ok")
 
-    step4_progress = start_progress("Step 4: Ricci numerator products", ricci_numerator_progress_steps(numerator_method))
-    step4 = compute_ricci_numerators_from_inverse_coeffs(step3; progress = step4_progress, method = numerator_method, pdeg)
+    step4_progress = start_progress("Step 4: Ricci numerator products", 50)
+    step4 = compute_ricci_numerators_truncated_coefficient_space(step3; progress = step4_progress, pdeg)
     finish_progress!(step4_progress)
     println("Step 4: Build Ricci numerator coefficient arrays ... ok")
 
@@ -113,14 +72,12 @@ function bound_ricci_subdivision_local(
         subdivision_time,
         pdeg,
         num_subdivisions,
-        inverse_build_method,
-        numerator_method,
     )
 end
 
 function main()
     setprecision(BigFloat, 100)
-    bound_ricci_subdivision_local(METRIC_U0_PATH, 10, 40)
+    bound_ricci_subdivision_local(METRIC_U0_PATH, 10, 4)
 end
 if abspath(PROGRAM_FILE) == @__FILE__
     main()
