@@ -500,13 +500,10 @@ end
 Assemble the Lobatto-grid values of a Chebyshev series and its first and second 
 derivatives by applying the Chebyshev differentiation matrices.
 """
-function build_lobatto_derivative_pack(coeffs::AbstractMatrix{<:Number}; pdeg::Integer=size(coeffs,1))
+function build_lobatto_derivative_pack(u_vals::AbstractMatrix{<:Number}; pdeg::Integer=size(coeffs,1))
     Nx = pdeg - 1
     Ny = pdeg - 1
-    T = eltype(coeffs)
-
-    coeffs_pad = cheb_pad(coeffs, Nx, Ny)
-    u = cheb_coeffs_to_lobatto_values_2d(coeffs_pad)
+    T = eltype(u_vals)
 
     Dxξ = cheb_diff_matrix(Nx, T)
     Dyη = cheb_diff_matrix(Ny, T)
@@ -514,18 +511,23 @@ function build_lobatto_derivative_pack(coeffs::AbstractMatrix{<:Number}; pdeg::I
     Dx = exact(2) .* Dxξ
     Dy = -exact(2) .* Dyη
 
-    ux  = Dx * u
-    uy  = u * transpose(Dy)
+    ux  = Dx * u_vals
+    uy  = u_vals * transpose(Dy)
 
     uxx = Dx * ux
     uyy = uy * transpose(Dy)
-    uxy = Dx * uy
+    uxy = ux * transpose(Dy)
 
+    uxxx = Dx * uxx
+    uxxy = uxx * transpose(Dy)
+    uxyy = uxy * transpose(Dy)
+    uyyy = uyy * transpose(Dy)
+    
     zξ = [cospi(interval(BigFloat(k)) / exact(BigFloat(Nx))) for k in 0:Nx]
     zη = [cospi(interval(BigFloat(k)) / exact(BigFloat(Ny))) for k in 0:Ny]
 
     xarr = (zξ .+ exact(1)) ./ exact(2)
     yarr = (exact(1) .- zη) ./ exact(2)
 
-    return (; u, ux, uy, uxx, uyy, uxy, xarr, yarr, pdeg)
+    return (; ux, uy, uxx, uyy, uxy, uxxx, uxxy, uxyy, uyyy, xarr, yarr, pdeg)
 end

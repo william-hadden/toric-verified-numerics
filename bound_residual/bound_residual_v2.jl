@@ -13,13 +13,17 @@ function compute_bound_residual_v2(coeffs_path::AbstractString; pdeg::Integer=24
     println("Step 2: Compute G and H values on the grid ... ok")
     println("Step 2 guaranteed: $(all(isguaranteed, step2.G) && all(isguaranteed, step2.H))")
 
-    step3 = step3_compute_MA_derivative_bound_v2(step2.H, step2.G)
-    println("Step 3: ||MAx||_∞ <= [$(inf(step3.MAx_bound)), $(sup(step3.MAx_bound))], " * "||MAy||_∞ <= [$(inf(step3.MAy_bound)), $(sup(step3.MAy_bound))]" * "||dMA||_∞ <= [$(inf(step3.dMA_bound)), $(sup(step3.dMA_bound))]")
-    println("Step 3 guaranteed: $(isguaranteed(step3.dMA_bound))")
+    step3 = step3_compute_MA_derivatives(step2.H, step2.G; pdeg)
+    println("Step 3: ||MAx||_∞ <= [$(inf(step3.MAx_bound)), $(sup(step3.MAx_bound))], " * "||MAy||_∞ <= [$(inf(step3.MAy_bound)), $(sup(step3.MAy_bound))]")
+    println("Step 3 guaranteed: $(isguaranteed(step3.MAx_bound))")
 
-    step4 = step4_compute_residual_bound_by_MVT(step3.H_coeffs, step3.G_coeffs, step3.dMA_bound)
-    println("Step 4: ||E||_∞ <= $(step4.residual_bound)")
-    println("Step 4 guaranteed: $(isguaranteed(step4.residual_bound))")
+    step4 = step4_compute_MA_derivative_bound(step3.MAx_bound, step3.MAx_bound)
+    println("Step 4: ||dMA||_∞ <= [$(inf(step4.dMA_bound)), $(sup(step4.dMA_bound))]")
+    println("Step 4 guaranteed: $(isguaranteed(step4.dMA_bound))")
+
+    step5 = step5_compute_residual_bound_by_MVT(step3.H_coeffs, step4.G_coeffs)
+    println("Step 5: ||E||_∞ <= $(step5.residual_bound)")
+    println("Step 5 guaranteed: $(isguaranteed(step5.residual_bound))")
 
     step_nabla()
     step_nabla2()
