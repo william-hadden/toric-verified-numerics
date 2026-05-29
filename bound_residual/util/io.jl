@@ -1,4 +1,5 @@
 import JSON
+import Printf
 
 const DEFAULT_REF_INDEX = (2, 2)
 const REPO_ROOT = normpath(joinpath(@__DIR__, "..", ".."))
@@ -58,8 +59,14 @@ function parse_bound_value(bound::AbstractString)::Interval{BigFloat}
     return interval(lower, upper)
 end
 
-serialize_bound_value(bound::Interval) = string(sup(bound))
-serialize_bound_value(bound::Real) = serialize_bound_value(Interval{BigFloat}(interval(bound)))
+const SERIALIZED_BOUND_DECIMAL_DIGITS = 77
+
+function serialize_bound_value(bound::BigFloat)
+    return Printf.@sprintf("%.*f", SERIALIZED_BOUND_DECIMAL_DIGITS, bound)
+end
+
+serialize_bound_value(bound::Interval) = serialize_bound_value(BigFloat(sup(bound)))
+serialize_bound_value(bound::Real) = serialize_bound_value(BigFloat(bound))
 serialize_bound_value(bounds::NamedTuple) = Dict(String(key) => serialize_bound_value(value) for (key, value) in pairs(bounds))
 serialize_bound_value(bounds::AbstractDict) = Dict(String(key) => serialize_bound_value(value) for (key, value) in bounds)
 

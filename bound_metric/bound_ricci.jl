@@ -14,7 +14,7 @@ include(joinpath(@__DIR__, "util", "inverse_bounds.jl"))
 include(joinpath(@__DIR__, "util", "inverse_truncation.jl"))
 include(joinpath(@__DIR__, "util", "chebyshev_interval_evaluation.jl"))
 include(joinpath(@__DIR__, "util", "inverse_subdivision_bounds.jl"))
-include(joinpath(@__DIR__, "util", "ricci_bounds.jl"))
+include(joinpath(@__DIR__, "util", "curvature_bounds.jl"))
 
 """
 Bound the `C^0` norm of the Ricci tensor using truncated local subdivision.
@@ -39,7 +39,7 @@ function bound_ricci_subdivision_local(
     finish_progress!(step3_progress)
     println("Step 3: Build inverse metric coefficient arrays ... ok")
 
-    step4_progress = start_progress("Step 4: Ricci numerator products", 50)
+    step4_progress = start_progress("Step 4: Ricci numerator products", 62)
     step4 = compute_ricci_numerators_truncated_coefficient_space(step3; progress = step4_progress, pdeg)
     finish_progress!(step4_progress)
     println("Step 4: Build Ricci numerator coefficient arrays ... ok")
