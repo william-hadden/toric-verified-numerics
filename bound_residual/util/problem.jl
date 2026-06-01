@@ -172,107 +172,95 @@ function step3_compute_MA_derivatives(H_values::AbstractMatrix{<:Number}, G_valu
 
     println("Computing H derivative vals...")
     H_pack = build_lobatto_derivative_pack(H_values; pdeg)
-    println("Computing G derivative vals...")
-    G_pack = build_lobatto_derivative_pack(G_values; pdeg)
 
     println("Computing H derivative coeffs...")
     Hx_coeffs = cheb_lobatto_values_to_coeffs_2d(H_pack.ux)
     Hy_coeffs = cheb_lobatto_values_to_coeffs_2d(H_pack.uy)
-    Hxx_coeffs = cheb_lobatto_values_to_coeffs_2d(H_pack.uxx)
-    Hxy_coeffs = cheb_lobatto_values_to_coeffs_2d(H_pack.uxy)
-    Hyy_coeffs = cheb_lobatto_values_to_coeffs_2d(H_pack.uyy)
-    Hxxx_coeffs = cheb_lobatto_values_to_coeffs_2d(H_pack.uxxx)
-    Hxxy_coeffs = cheb_lobatto_values_to_coeffs_2d(H_pack.uxxy)
-    Hxyy_coeffs = cheb_lobatto_values_to_coeffs_2d(H_pack.uxyy)
-    Hyyy_coeffs = cheb_lobatto_values_to_coeffs_2d(H_pack.uyyy)
 
-    println("Computing G derivative coeffs...")
-    Gx_coeffs = cheb_lobatto_values_to_coeffs_2d(G_pack.ux)
-    Gy_coeffs = cheb_lobatto_values_to_coeffs_2d(G_pack.uy)
-    Gxx_coeffs = cheb_lobatto_values_to_coeffs_2d(G_pack.uxx)
-    Gxy_coeffs = cheb_lobatto_values_to_coeffs_2d(G_pack.uxy)
-    Gyy_coeffs = cheb_lobatto_values_to_coeffs_2d(G_pack.uyy)
-    Gxxx_coeffs = cheb_lobatto_values_to_coeffs_2d(G_pack.uxxx)
-    Gxxy_coeffs = cheb_lobatto_values_to_coeffs_2d(G_pack.uxxy)
-    Gxyy_coeffs = cheb_lobatto_values_to_coeffs_2d(G_pack.uxyy)
-    Gyyy_coeffs = cheb_lobatto_values_to_coeffs_2d(G_pack.uyyy)
+    # Use the notation "a" for a multi-index, e.g. a=xxy or a=xx.
+    # We then compute the MAa_factor_coeffs, that is the coefficients
+    # of the function MAa_factor satisfying the equation
+    # MAa=exp(H) * MAa_factor.
+    # E.g. for a=xx: MAxx=exp(H) * MAxx_factor.
 
-    println("Computing MAx coeffs...")
-    MAx_coeffs = cheb_add(Gx_coeffs, cheb_mul2(G_coeffs, Hx_coeffs))
-    println("Computing MAy coeffs...")
-    MAy_coeffs = cheb_add(Gy_coeffs, cheb_mul2(G_coeffs, Hy_coeffs))
-    println("Computing MAxx coeffs...")
-    MAxx_coeffs = cheb_add(2 * cheb_mul2(Hx_coeffs, Gx_coeffs), 
-                    cheb_add(cheb_mul2(G_coeffs, Hx_coeffs), 
-                    cheb_add(Gxx_coeffs, cheb_mul2(G_coeffs, Hxx_coeffs))))
-    println("Computing MAxy coeffs...")
-    MAxy_coeffs = cheb_add(cheb_mul2(Hy_coeffs, Gx_coeffs), 
-                    cheb_add(cheb_mul2(G_coeffs, cheb_mul2(Hx_coeffs, Hy_coeffs)), 
-                    cheb_add(Gxy_coeffs, 
-                    cheb_add(cheb_mul2(Gy_coeffs, Hx_coeffs), cheb_mul2(G_coeffs, Hxy_coeffs)))))
-    println("Computing MAyy coeffs...")
-    MAyy_coeffs = cheb_add(2 * cheb_mul2(Hy_coeffs, Gy_coeffs), 
-                    cheb_add(cheb_mul2(G_coeffs, Hy_coeffs), 
-                    cheb_add(Gyy_coeffs, cheb_mul2(G_coeffs, Hyy_coeffs))))
-    println("Computing MAxxx coeffs...")
-    MAxxx_coeffs = cheb_add(2 * cheb_mul2(Gx_coeffs, cheb_mul2(Hx_coeffs, Hx_coeffs)), 
-                    cheb_add(cheb_mul2(G_coeffs, cheb_mul2(Hx_coeffs, Hx_coeffs)), 
-                    cheb_add(cheb_mul2(G_coeffs, cheb_mul2(Hxx_coeffs, Hx_coeffs)), 
-                    cheb_add(3 * cheb_mul2(Hxx_coeffs, Gx_coeffs), 
-                    cheb_add(3 * cheb_mul2(Hx_coeffs, Gxx_coeffs), 
-                    cheb_add(cheb_mul2(Gx_coeffs, Hx_coeffs), 
-                    cheb_add(cheb_mul2(G_coeffs, Hxx_coeffs), 
-                    cheb_add(Gxxx_coeffs, cheb_mul2(G_coeffs, Hxxx_coeffs)))))))))
-    println("Computing MAxxy coeffs...")
-    MAxxy_coeffs = cheb_add(2 * cheb_mul2(Hy_coeffs, cheb_mul2(Hx_coeffs, Gx_coeffs)), 
-                    cheb_add(cheb_mul2(G_coeffs, cheb_mul2(Hx_coeffs, Hy_coeffs)), 
-                    cheb_add(cheb_mul2(Gxx_coeffs, Hy_coeffs), 
-                    cheb_add(cheb_mul2(G_coeffs, cheb_mul2(Hy_coeffs, Hxx_coeffs)), 
-                    cheb_add(cheb_mul2(Hxy_coeffs, Gx_coeffs), 
-                    cheb_add(cheb_mul2(Hx_coeffs, Gxy_coeffs), 
-                    cheb_add(cheb_mul2(Gy_coeffs, Hx_coeffs), 
-                    cheb_add(cheb_mul2(G_coeffs, Hxy_coeffs), 
-                    cheb_add(Gxxy_coeffs, 
-                    cheb_add(cheb_mul2(Gy_coeffs, Hxx_coeffs) ,cheb_mul2(G_coeffs, Hxxy)))))))))))
-    println("Computing MAxyy coeffs...")
-    MAxyy_coeffs = cheb_add(cheb_mul2(Gx_coeffs, cheb_mul2(Hy_coeffs, Hy_coeffs)), 
-                    cheb_add(cheb_mul2(cheb_mul2(G_coeffs, Hx_coeffs),cheb_mul2(Hy_coeffs, Hy_coeffs)), 
-                    cheb_add(2 * cheb_mul2(Hy_coeffs, Gxy_coeffs), 
-                    cheb_add(2 * cheb_mul2(Gy_coeffs, cheb_mul2(Hx_coeffs, Hy_coeffs)), 
-                    cheb_add(2 * cheb_mul2(G_coeffs, cheb_mul2(Hy_coeffs, Hxy_coeffs)), 
-                    cheb_add(cheb_mul2(Hyy_coeffs, Gx_coeffs), 
-                    cheb_add(cheb_mul2(G_coeffs, cheb_mul2(Hx_coeffs, Hyy_coeffs)), 
-                    cheb_add(Gxyy_coeffs, 
-                    cheb_add(cheb_mul2(Gyy_coeffs, Hx_coeffs), 
-                    cheb_add(cheb_mul2(Gy_coeffs, Hxy_coeffs), cheb_mul2(Gy_coeffs, Hxyy_coeffs)))))))))))
-    println("Computing MAyyy coeffs...")
-    MAyyy_coeffs = cheb_add(2 * cheb_mul2(Gy_coeffs, cheb_mul2(Hy_coeffs, Hy_coeffs)), 
-                    cheb_add(cheb_mul2(G_coeffs, cheb_mul2(Hy_coeffs, Hy_coeffs)), 
-                    cheb_add(cheb_mul2(G_coeffs, cheb_mul2(Hyy_coeffs, Hy_coeffs)), 
-                    cheb_add(3 * cheb_mul2(Hyy_coeffs, Gy_coeffs), 
-                    cheb_add(3 * cheb_mul2(Hy_coeffs, Gyy_coeffs), 
-                    cheb_add(cheb_mul2(Gy_coeffs, Hy_coeffs), 
-                    cheb_add(cheb_mul2(G_coeffs, Hyy_coeffs), 
-                    cheb_add(Gyyy_coeffs, cheb_mul2(G_coeffs, Hyyy_coeffs)))))))))
+    """
+    This helper function takes MAa_factor_coeffs and x or y and
+    returns MAax_factor_coeffs or MAay_factor_coeffs, respectively.
+    """
+    function differentiate_MA_factor(MAa_factor_coeffs, direction::Symbol)
+        if direction == :x
+            return cheb_add(
+                differentiate_coeffs_x(MAa_factor_coeffs),
+                cheb_mul2(Hx_coeffs, MAa_factor_coeffs),
+            )
+        elseif direction == :y
+            return cheb_add(
+                differentiate_coeffs_y(MAa_factor_coeffs),
+                cheb_mul2(Hy_coeffs, MAa_factor_coeffs),
+            )
+        end
+    end
+
+    println("Computing MAx factor coeffs...")
+    MAx_factor_coeffs = differentiate_MA_factor(G_coeffs, :x)
+    println("Computing MAy factor coeffs...")
+    MAy_factor_coeffs = differentiate_MA_factor(G_coeffs, :y)
+    println("Computing MAxx factor coeffs...")
+    MAxx_factor_coeffs = differentiate_MA_factor(MAx_factor_coeffs, :x)
+    println("Computing MAxy factor coeffs...")
+    MAxy_factor_coeffs = differentiate_MA_factor(MAx_factor_coeffs, :y)
+    println("Computing MAyy factor coeffs...")
+    MAyy_factor_coeffs = differentiate_MA_factor(MAy_factor_coeffs, :y)
+    println("Computing MAxxx factor coeffs...")
+    MAxxx_factor_coeffs = differentiate_MA_factor(MAxx_factor_coeffs, :x)
+    println("Computing MAxxy factor coeffs...")
+    MAxxy_factor_coeffs = differentiate_MA_factor(MAxx_factor_coeffs, :y)
+    println("Computing MAxyy factor coeffs...")
+    MAxyy_factor_coeffs = differentiate_MA_factor(MAxy_factor_coeffs, :y)
+    println("Computing MAyyy factor coeffs...")
+    MAyyy_factor_coeffs = differentiate_MA_factor(MAyy_factor_coeffs, :y)
 
     println("Computing MAx bound...")
-    MAx_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAx_coeffs)
+    MAx_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAx_factor_coeffs)
     println("Computing MAy bound...")
-    MAy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAy_coeffs)
+    MAy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAy_factor_coeffs)
     println("Computing MAxx bound...")
-    MAxx_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxx_coeffs)
+    MAxx_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxx_factor_coeffs)
     println("Computing MAxy bound...")
-    MAxy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxy_coeffs)
+    MAxy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxy_factor_coeffs)
     println("Computing MAyy bound...")
-    MAyy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAyy_coeffs)
+    MAyy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAyy_factor_coeffs)
     println("Computing MAxxx bound...")
-    MAxxx_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxxx_coeffs)
+    MAxxx_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxxx_factor_coeffs)
     println("Computing MAxxy bound...")
-    MAxxy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxxy_coeffs)
+    MAxxy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxxy_factor_coeffs)
     println("Computing MAxyy bound...")
-    MAxyy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxyy_coeffs)
+    MAxyy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxyy_factor_coeffs)
     println("Computing MAyyy bound...")
-    MAyyy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAyyy_coeffs)
+    MAyyy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAyyy_factor_coeffs)
+
+    write_bound_entry("ma_first_derivatives", "x", MAx_bound)
+    write_bound_entry("ma_first_derivatives", "y", MAy_bound)
+    write_bound_entry("ma_derivatives", "d1", Dict(
+        "x" => MAx_bound,
+        "y" => MAy_bound,
+    ))
+    write_bound_entry("ma_derivatives", "d2", Dict(
+        "xx" => MAxx_bound,
+        "xy" => MAxy_bound,
+        "yx" => MAxy_bound,
+        "yy" => MAyy_bound,
+    ))
+    write_bound_entry("ma_derivatives", "d3", Dict(
+        "xxx" => MAxxx_bound,
+        "xxy" => MAxxy_bound,
+        "xyx" => MAxxy_bound,
+        "yxx" => MAxxy_bound,
+        "xyy" => MAxyy_bound,
+        "yxy" => MAxyy_bound,
+        "yyx" => MAxyy_bound,
+        "yyy" => MAyyy_bound,
+    ))
 
     return (;
         H_coeffs,

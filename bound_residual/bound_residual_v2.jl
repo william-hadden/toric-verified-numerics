@@ -17,11 +17,11 @@ function compute_bound_residual_v2(coeffs_path::AbstractString; pdeg::Integer=24
     println("Step 3: ||MAx||_∞ <= [$(inf(step3.MAx_bound)), $(sup(step3.MAx_bound))], " * "||MAy||_∞ <= [$(inf(step3.MAy_bound)), $(sup(step3.MAy_bound))]")
     println("Step 3 guaranteed: $(isguaranteed(step3.MAx_bound))")
 
-    step4 = step4_compute_MA_derivative_bound(step3.MAx_bound, step3.MAx_bound)
+    step4 = step4_compute_MA_derivative_bound(step3.MAx_bound, step3.MAy_bound)
     println("Step 4: ||dMA||_∞ <= [$(inf(step4.dMA_bound)), $(sup(step4.dMA_bound))]")
     println("Step 4 guaranteed: $(isguaranteed(step4.dMA_bound))")
 
-    step5 = step5_compute_residual_bound_by_MVT(step3.H_coeffs, step4.G_coeffs)
+    step5 = step5_compute_residual_bound_by_MVT(step3.H_coeffs, step3.G_coeffs, step4.dMA_bound)
     println("Step 5: ||E||_∞ <= $(step5.residual_bound)")
     println("Step 5 guaranteed: $(isguaranteed(step5.residual_bound))")
 
@@ -29,7 +29,7 @@ function compute_bound_residual_v2(coeffs_path::AbstractString; pdeg::Integer=24
     step_nabla2()
     step_nabla3()
 
-    return (; step1, step2, step3, step4)
+    return (; step1, step2, step3, step4, step5)
 end
 
 """
