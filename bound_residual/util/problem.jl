@@ -171,17 +171,19 @@ function step3_compute_MA_derivatives(H_values::AbstractMatrix{<:Number}, G_valu
     exp_H_bound = exp(H_bound)
 
     println("Computing H derivative vals...")
-    H_pack = build_lobatto_derivative_pack(H_values; pdeg)
+    H_pack = build_lobatto_first_derivative_pack(H_values; pdeg)
 
     println("Computing H derivative coeffs...")
     Hx_coeffs = cheb_lobatto_values_to_coeffs_2d(H_pack.ux)
     Hy_coeffs = cheb_lobatto_values_to_coeffs_2d(H_pack.uy)
 
-    # Use the notation "a" for a multi-index, e.g. a=xxy or a=xx.
-    # We then compute the MAa_factor_coeffs, that is the coefficients
-    # of the function MAa_factor satisfying the equation
-    # MAa=exp(H) * MAa_factor.
-    # E.g. for a=xx: MAxx=exp(H) * MAxx_factor.
+    """
+    Use the notation "a" for a multi-index, e.g. a=xxy or a=xx.
+    We then compute the MAa_factor_coeffs, that is the coefficients
+    of the function MAa_factor satisfying the equation
+    MAa=exp(H) * MAa_factor.
+    E.g. for a=xx: MAxx=exp(H) * MAxx_factor.
+    """
 
     """
     This helper function takes MAa_factor_coeffs and x or y and
@@ -219,6 +221,57 @@ function step3_compute_MA_derivatives(H_values::AbstractMatrix{<:Number}, G_valu
     MAxyy_factor_coeffs = differentiate_MA_factor(MAxy_factor_coeffs, :y)
     println("Computing MAyyy factor coeffs...")
     MAyyy_factor_coeffs = differentiate_MA_factor(MAyy_factor_coeffs, :y)
+
+    # """
+    # This helper function takes MAa_factor_vals and x or y and
+    # returns MAax_factor_vals or MAay_factor_vals, respectively.
+    # """
+    # function differentiate_MA_factor_vals(MAa_factor_vals, direction::Symbol)
+    #     MAa_pack = build_lobatto_first_derivative_pack(MAa_factor_vals; pdeg)
+    #     if direction == :x
+    #         return MAa_pack.ux + H_pack.ux * MAa_factor_vals
+    #     elseif direction == :y
+    #         return MAa_pack.uy + H_pack.uy * MAa_factor_vals
+    #     end
+    # end
+
+    # println("Computing MAx factor vals...")
+    # MAx_factor_vals = differentiate_MA_factor_vals(G_values, :x)
+    # println("Computing MAy factor vals...")
+    # MAy_factor_vals = differentiate_MA_factor_vals(G_values, :y)
+    # println("Computing MAxx factor vals...")
+    # MAxx_factor_vals = differentiate_MA_factor_vals(MAx_factor_vals, :x)
+    # println("Computing MAxy factor vals...")
+    # MAxy_factor_vals = differentiate_MA_factor_vals(MAx_factor_vals, :y)
+    # println("Computing MAyy factor vals...")
+    # MAyy_factor_vals = differentiate_MA_factor_vals(MAy_factor_vals, :y)
+    # println("Computing MAxxx factor vals...")
+    # MAxxx_factor_vals = differentiate_MA_factor_vals(MAxx_factor_vals, :x)
+    # println("Computing MAxxy factor vals...")
+    # MAxxy_factor_vals = differentiate_MA_factor_vals(MAxx_factor_vals, :y)
+    # println("Computing MAxyy factor vals...")
+    # MAxyy_factor_vals = differentiate_MA_factor_vals(MAxy_factor_vals, :y)
+    # println("Computing MAyyy factor vals...")
+    # MAyyy_factor_vals = differentiate_MA_factor_vals(MAyy_factor_vals, :y)
+
+    # println("Computing MAx factor coeffs...")
+    # MAx_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAx_factor_vals) 
+    # println("Computing MAy factor coeffs...")
+    # MAy_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAy_factor_vals)
+    # println("Computing MAxx factor coeffs...")
+    # MAxx_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAxx_factor_vals)
+    # println("Computing MAxy factor coeffs...")
+    # MAxy_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAxy_factor_vals)
+    # println("Computing MAyy factor coeffs...")
+    # MAyy_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAyy_factor_vals)
+    # println("Computing MAxxx factor coeffs...")
+    # MAxxx_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAxxx_factor_vals)
+    # println("Computing MAxxy factor coeffs...")
+    # MAxxy_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAxxy_factor_vals)
+    # println("Computing MAxyy factor coeffs...")
+    # MAxyy_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAxyy_factor_vals)
+    # println("Computing MAyyy factor coeffs...")
+    # MAyyy_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAyyy_factor_vals)
 
     println("Computing MAx bound...")
     MAx_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAx_factor_coeffs)

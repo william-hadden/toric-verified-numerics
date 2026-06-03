@@ -531,3 +531,26 @@ function build_lobatto_derivative_pack(u_vals::AbstractMatrix{<:Number}; pdeg::I
 
     return (; ux, uy, uxx, uyy, uxy, uxxx, uxxy, uxyy, uyyy, xarr, yarr, pdeg)
 end
+
+function build_lobatto_first_derivative_pack(u_vals::AbstractMatrix{<:Number}; pdeg::Integer=size(coeffs,1))
+    Nx = pdeg - 1
+    Ny = pdeg - 1
+    T = eltype(u_vals)
+
+    Dxξ = cheb_diff_matrix(Nx, T)
+    Dyη = cheb_diff_matrix(Ny, T)
+
+    Dx = exact(2) .* Dxξ
+    Dy = -exact(2) .* Dyη
+
+    ux  = Dx * u_vals
+    uy  = u_vals * transpose(Dy)
+    
+    zξ = [cospi(interval(BigFloat(k)) / exact(BigFloat(Nx))) for k in 0:Nx]
+    zη = [cospi(interval(BigFloat(k)) / exact(BigFloat(Ny))) for k in 0:Ny]
+
+    xarr = (zξ .+ exact(1)) ./ exact(2)
+    yarr = (exact(1) .- zη) ./ exact(2)
+
+    return (; ux, uy, xarr, yarr, pdeg)
+end
