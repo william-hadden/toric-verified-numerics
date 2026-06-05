@@ -205,22 +205,57 @@ function step3_compute_MA_derivatives(H_values::AbstractMatrix{<:Number}, G_valu
 
     println("Computing MAx factor coeffs...")
     MAx_factor_coeffs = differentiate_MA_factor(G_coeffs, :x)
+    println("Computing MAx bound...")
+    MAx_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAx_factor_coeffs)
+    println("MAx bound: $(MAx_bound)")
+
     println("Computing MAy factor coeffs...")
     MAy_factor_coeffs = differentiate_MA_factor(G_coeffs, :y)
+    println("Computing MAy bound...")
+    MAy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAy_factor_coeffs)
+    println("MAy bound: $(MAy_bound)")
+
     println("Computing MAxx factor coeffs...")
     MAxx_factor_coeffs = differentiate_MA_factor(MAx_factor_coeffs, :x)
+    println("Computing MAxx bound...")
+    MAxx_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxx_factor_coeffs)
+    println("MAxx bound: $(MAxx_bound)")
+
     println("Computing MAxy factor coeffs...")
     MAxy_factor_coeffs = differentiate_MA_factor(MAx_factor_coeffs, :y)
+    println("Computing MAxy bound...")
+    MAxy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxy_factor_coeffs)
+    println("MAxy bound: $(MAxy_bound)")
+
     println("Computing MAyy factor coeffs...")
     MAyy_factor_coeffs = differentiate_MA_factor(MAy_factor_coeffs, :y)
+    println("Computing MAyy bound...")
+    MAyy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAyy_factor_coeffs)
+    println("MAyy bound: $(MAyy_bound)")
+
     println("Computing MAxxx factor coeffs...")
     MAxxx_factor_coeffs = differentiate_MA_factor(MAxx_factor_coeffs, :x)
+    println("Computing MAxxx bound...")
+    MAxxx_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxxx_factor_coeffs)
+    println("MAxxx bound: $(MAxxx_bound)")
+
     println("Computing MAxxy factor coeffs...")
     MAxxy_factor_coeffs = differentiate_MA_factor(MAxx_factor_coeffs, :y)
+    println("Computing MAxxy bound...")
+    MAxxy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxxy_factor_coeffs)
+    println("MAxxy bound: $(MAxxy_bound)")
+
     println("Computing MAxyy factor coeffs...")
     MAxyy_factor_coeffs = differentiate_MA_factor(MAxy_factor_coeffs, :y)
+    println("Computing MAxyy bound...")
+    MAxyy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxyy_factor_coeffs)
+    println("MAxyy bound: $(MAxyy_bound)")
+
     println("Computing MAyyy factor coeffs...")
     MAyyy_factor_coeffs = differentiate_MA_factor(MAyy_factor_coeffs, :y)
+    println("Computing MAyyy bound...")
+    MAyyy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAyyy_factor_coeffs)
+    println("MAyyy bound: $(MAyyy_bound)")
 
     # """
     # This helper function takes MAa_factor_vals and x or y and
@@ -272,25 +307,6 @@ function step3_compute_MA_derivatives(H_values::AbstractMatrix{<:Number}, G_valu
     # MAxyy_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAxyy_factor_vals)
     # println("Computing MAyyy factor coeffs...")
     # MAyyy_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAyyy_factor_vals)
-
-    println("Computing MAx bound...")
-    MAx_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAx_factor_coeffs)
-    println("Computing MAy bound...")
-    MAy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAy_factor_coeffs)
-    println("Computing MAxx bound...")
-    MAxx_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxx_factor_coeffs)
-    println("Computing MAxy bound...")
-    MAxy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxy_factor_coeffs)
-    println("Computing MAyy bound...")
-    MAyy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAyy_factor_coeffs)
-    println("Computing MAxxx bound...")
-    MAxxx_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxxx_factor_coeffs)
-    println("Computing MAxxy bound...")
-    MAxxy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxxy_factor_coeffs)
-    println("Computing MAxyy bound...")
-    MAxyy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxyy_factor_coeffs)
-    println("Computing MAyyy bound...")
-    MAyyy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAyyy_factor_coeffs)
 
     write_bound_entry("ma_first_derivatives", "x", MAx_bound)
     write_bound_entry("ma_first_derivatives", "y", MAy_bound)
