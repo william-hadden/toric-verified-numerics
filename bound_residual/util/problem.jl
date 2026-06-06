@@ -157,7 +157,7 @@ end
 
 
 """
-Bound the derivatives of the MA equation in coefficient space, using the Chebyshev values of G and H on the grid.
+Bound the derivatives of the MA equation on the Lobatto grid, using the Chebyshev values of G and H on the grid.
 """
 function step3_compute_MA_derivatives(H_values::AbstractMatrix{<:Number}, G_values::AbstractMatrix{<:Number}; pdeg::Integer=240)
     println("Computing H_coeffs...")
@@ -173,140 +173,59 @@ function step3_compute_MA_derivatives(H_values::AbstractMatrix{<:Number}, G_valu
     println("Computing H derivative vals...")
     H_pack = build_lobatto_first_derivative_pack(H_values; pdeg)
 
-    println("Computing H derivative coeffs...")
-    Hx_coeffs = cheb_lobatto_values_to_coeffs_2d(H_pack.ux)
-    Hy_coeffs = cheb_lobatto_values_to_coeffs_2d(H_pack.uy)
-
-    """
-    Use the notation "a" for a multi-index, e.g. a=xxy or a=xx.
-    We then compute the MAa_factor_coeffs, that is the coefficients
-    of the function MAa_factor satisfying the equation
-    MAa=exp(H) * MAa_factor.
-    E.g. for a=xx: MAxx=exp(H) * MAxx_factor.
-    """
-
-    """
-    This helper function takes MAa_factor_coeffs and x or y and
-    returns MAax_factor_coeffs or MAay_factor_coeffs, respectively.
-    """
-    function differentiate_MA_factor(MAa_factor_coeffs, direction::Symbol)
+    function differentiate_MA_factor_vals(MAa_factor_vals, direction::Symbol)
+        MAa_pack = build_lobatto_first_derivative_pack(MAa_factor_vals; pdeg)
         if direction == :x
-            return cheb_add(
-                differentiate_coeffs_x(MAa_factor_coeffs),
-                cheb_mul2(Hx_coeffs, MAa_factor_coeffs),
-            )
+            return MAa_pack.ux .+ H_pack.ux .* MAa_factor_vals
         elseif direction == :y
-            return cheb_add(
-                differentiate_coeffs_y(MAa_factor_coeffs),
-                cheb_mul2(Hy_coeffs, MAa_factor_coeffs),
-            )
+            return MAa_pack.uy .+ H_pack.uy .* MAa_factor_vals
         end
     end
 
-    println("Computing MAx factor coeffs...")
-    MAx_factor_coeffs = differentiate_MA_factor(G_coeffs, :x)
-    println("Computing MAx bound...")
-    MAx_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAx_factor_coeffs)
-    println("MAx bound: $(MAx_bound)")
+    function bound_MA_factor(label::AbstractString, MAa_factor_vals)
+        println("Computing $(label) factor coeffs...")
+        MAa_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAa_factor_vals)
+        println("Computing $(label) bound...")
+        MAa_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAa_factor_coeffs)
+        println("$(label) bound: $(MAa_bound)")
+        return MAa_factor_coeffs, MAa_bound
+    end
 
-    println("Computing MAy factor coeffs...")
-    MAy_factor_coeffs = differentiate_MA_factor(G_coeffs, :y)
-    println("Computing MAy bound...")
-    MAy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAy_factor_coeffs)
-    println("MAy bound: $(MAy_bound)")
+    println("Computing MAx factor vals...")
+    MAx_factor_vals = differentiate_MA_factor_vals(G_values, :x)
+    MAx_factor_coeffs, MAx_bound = bound_MA_factor("MAx", MAx_factor_vals)
 
-    println("Computing MAxx factor coeffs...")
-    MAxx_factor_coeffs = differentiate_MA_factor(MAx_factor_coeffs, :x)
-    println("Computing MAxx bound...")
-    MAxx_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxx_factor_coeffs)
-    println("MAxx bound: $(MAxx_bound)")
+    println("Computing MAy factor vals...")
+    MAy_factor_vals = differentiate_MA_factor_vals(G_values, :y)
+    MAy_factor_coeffs, MAy_bound = bound_MA_factor("MAy", MAy_factor_vals)
 
-    println("Computing MAxy factor coeffs...")
-    MAxy_factor_coeffs = differentiate_MA_factor(MAx_factor_coeffs, :y)
-    println("Computing MAxy bound...")
-    MAxy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxy_factor_coeffs)
-    println("MAxy bound: $(MAxy_bound)")
+    println("Computing MAxx factor vals...")
+    MAxx_factor_vals = differentiate_MA_factor_vals(MAx_factor_vals, :x)
+    MAxx_factor_coeffs, MAxx_bound = bound_MA_factor("MAxx", MAxx_factor_vals)
 
-    println("Computing MAyy factor coeffs...")
-    MAyy_factor_coeffs = differentiate_MA_factor(MAy_factor_coeffs, :y)
-    println("Computing MAyy bound...")
-    MAyy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAyy_factor_coeffs)
-    println("MAyy bound: $(MAyy_bound)")
+    println("Computing MAxy factor vals...")
+    MAxy_factor_vals = differentiate_MA_factor_vals(MAx_factor_vals, :y)
+    MAxy_factor_coeffs, MAxy_bound = bound_MA_factor("MAxy", MAxy_factor_vals)
 
-    println("Computing MAxxx factor coeffs...")
-    MAxxx_factor_coeffs = differentiate_MA_factor(MAxx_factor_coeffs, :x)
-    println("Computing MAxxx bound...")
-    MAxxx_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxxx_factor_coeffs)
-    println("MAxxx bound: $(MAxxx_bound)")
+    println("Computing MAyy factor vals...")
+    MAyy_factor_vals = differentiate_MA_factor_vals(MAy_factor_vals, :y)
+    MAyy_factor_coeffs, MAyy_bound = bound_MA_factor("MAyy", MAyy_factor_vals)
 
-    println("Computing MAxxy factor coeffs...")
-    MAxxy_factor_coeffs = differentiate_MA_factor(MAxx_factor_coeffs, :y)
-    println("Computing MAxxy bound...")
-    MAxxy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxxy_factor_coeffs)
-    println("MAxxy bound: $(MAxxy_bound)")
+    println("Computing MAxxx factor vals...")
+    MAxxx_factor_vals = differentiate_MA_factor_vals(MAxx_factor_vals, :x)
+    MAxxx_factor_coeffs, MAxxx_bound = bound_MA_factor("MAxxx", MAxxx_factor_vals)
 
-    println("Computing MAxyy factor coeffs...")
-    MAxyy_factor_coeffs = differentiate_MA_factor(MAxy_factor_coeffs, :y)
-    println("Computing MAxyy bound...")
-    MAxyy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAxyy_factor_coeffs)
-    println("MAxyy bound: $(MAxyy_bound)")
+    println("Computing MAxxy factor vals...")
+    MAxxy_factor_vals = differentiate_MA_factor_vals(MAxx_factor_vals, :y)
+    MAxxy_factor_coeffs, MAxxy_bound = bound_MA_factor("MAxxy", MAxxy_factor_vals)
 
-    println("Computing MAyyy factor coeffs...")
-    MAyyy_factor_coeffs = differentiate_MA_factor(MAyy_factor_coeffs, :y)
-    println("Computing MAyyy bound...")
-    MAyyy_bound = exp_H_bound * chebyshev_coeff_sup_bound(MAyyy_factor_coeffs)
-    println("MAyyy bound: $(MAyyy_bound)")
+    println("Computing MAxyy factor vals...")
+    MAxyy_factor_vals = differentiate_MA_factor_vals(MAxy_factor_vals, :y)
+    MAxyy_factor_coeffs, MAxyy_bound = bound_MA_factor("MAxyy", MAxyy_factor_vals)
 
-    # """
-    # This helper function takes MAa_factor_vals and x or y and
-    # returns MAax_factor_vals or MAay_factor_vals, respectively.
-    # """
-    # function differentiate_MA_factor_vals(MAa_factor_vals, direction::Symbol)
-    #     MAa_pack = build_lobatto_first_derivative_pack(MAa_factor_vals; pdeg)
-    #     if direction == :x
-    #         return MAa_pack.ux + H_pack.ux * MAa_factor_vals
-    #     elseif direction == :y
-    #         return MAa_pack.uy + H_pack.uy * MAa_factor_vals
-    #     end
-    # end
-
-    # println("Computing MAx factor vals...")
-    # MAx_factor_vals = differentiate_MA_factor_vals(G_values, :x)
-    # println("Computing MAy factor vals...")
-    # MAy_factor_vals = differentiate_MA_factor_vals(G_values, :y)
-    # println("Computing MAxx factor vals...")
-    # MAxx_factor_vals = differentiate_MA_factor_vals(MAx_factor_vals, :x)
-    # println("Computing MAxy factor vals...")
-    # MAxy_factor_vals = differentiate_MA_factor_vals(MAx_factor_vals, :y)
-    # println("Computing MAyy factor vals...")
-    # MAyy_factor_vals = differentiate_MA_factor_vals(MAy_factor_vals, :y)
-    # println("Computing MAxxx factor vals...")
-    # MAxxx_factor_vals = differentiate_MA_factor_vals(MAxx_factor_vals, :x)
-    # println("Computing MAxxy factor vals...")
-    # MAxxy_factor_vals = differentiate_MA_factor_vals(MAxx_factor_vals, :y)
-    # println("Computing MAxyy factor vals...")
-    # MAxyy_factor_vals = differentiate_MA_factor_vals(MAxy_factor_vals, :y)
-    # println("Computing MAyyy factor vals...")
-    # MAyyy_factor_vals = differentiate_MA_factor_vals(MAyy_factor_vals, :y)
-
-    # println("Computing MAx factor coeffs...")
-    # MAx_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAx_factor_vals) 
-    # println("Computing MAy factor coeffs...")
-    # MAy_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAy_factor_vals)
-    # println("Computing MAxx factor coeffs...")
-    # MAxx_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAxx_factor_vals)
-    # println("Computing MAxy factor coeffs...")
-    # MAxy_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAxy_factor_vals)
-    # println("Computing MAyy factor coeffs...")
-    # MAyy_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAyy_factor_vals)
-    # println("Computing MAxxx factor coeffs...")
-    # MAxxx_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAxxx_factor_vals)
-    # println("Computing MAxxy factor coeffs...")
-    # MAxxy_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAxxy_factor_vals)
-    # println("Computing MAxyy factor coeffs...")
-    # MAxyy_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAxyy_factor_vals)
-    # println("Computing MAyyy factor coeffs...")
-    # MAyyy_factor_coeffs = cheb_lobatto_values_to_coeffs_2d(MAyyy_factor_vals)
+    println("Computing MAyyy factor vals...")
+    MAyyy_factor_vals = differentiate_MA_factor_vals(MAyy_factor_vals, :y)
+    MAyyy_factor_coeffs, MAyyy_bound = bound_MA_factor("MAyyy", MAyyy_factor_vals)
 
     write_bound_entry("ma_first_derivatives", "x", MAx_bound)
     write_bound_entry("ma_first_derivatives", "y", MAy_bound)
