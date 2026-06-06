@@ -267,7 +267,7 @@ end
 
 
 """
-Bound the derivatives of the MA equation in coefficient space, using the Chebyshev values of G and H on the grid.
+Bound the first derivative of the MA equation using the first partial derivative bounds.
 """
 function step4_compute_MA_derivative_bound(MAx_bound, MAy_bound)
     dMA_bound = sqrt(MAx_bound^2 + MAy_bound^2)
@@ -284,6 +284,9 @@ function step5_compute_residual_bound_by_MVT(H_coeffs::AbstractMatrix{<:Number},
     MAp0 = evaluate_coeffs_at_point(G_coeffs, midpoint, midpoint) * exp(evaluate_coeffs_at_point(H_coeffs, midpoint, midpoint))
     d = sqrt(interval(BigFloat(1)) / exact(4) + interval(BigFloat(1)) / exact(4))
     residual = abs(MAp0 - exact(1)) + dMA_bound * d
+    polytope_volume_sqrt = interval(BigFloat(2)) * interval(BigFloat, pi)
+    write_bound_entry("ma_sobolev_bounds", "L2", polytope_volume_sqrt * residual)
+
     return (;
         residual_bound = residual
     )
@@ -434,8 +437,8 @@ where
 
 Here `n = 2`, `K2 = ||Riem||_C0`, and `K3 = ||nabla Riem||_C0`.
 The input `nabla_laplace_MA_L2_squared_bound` is the first summand
-`||nabla Delta u||_L2^2`. The lower Sobolev term is assembled from the
-`ma_sobolev_bounds` entries.
+`||nabla Delta u||_L2^2`. The lower Sobolev norm uses the project
+convention `||u||_L2_2 = ||u||_L2 + ||nabla u||_L2 + ||nabla^2 u||_L2`.
 """
 function nabla_3_from_laplace_bound(nabla_laplace_MA_L2_squared_bound::Number)
     curvature_bounds = read_bound("curvature_bounds")
@@ -446,20 +449,20 @@ function nabla_3_from_laplace_bound(nabla_laplace_MA_L2_squared_bound::Number)
 
     ma_sobolev_bounds = read_bound("ma_sobolev_bounds")
     MA_L2_bound = ma_sobolev_bounds["L2"]
-    MA_L2_2_squared_bound =
-        MA_L2_bound^2 +
-        ma_sobolev_bounds["nabla_L2"]^2 +
-        ma_sobolev_bounds["nabla2_L2"]^2
+    MA_L2_2_bound =
+        MA_L2_bound +
+        ma_sobolev_bounds["nabla_L2"] +
+        ma_sobolev_bounds["nabla2_L2"]
 
     return sqrt(
         nabla_laplace_MA_L2_squared_bound +
-        Cl_D3u_estimate_second_summand * MA_L2_2_squared_bound
+        Cl_D3u_estimate_second_summand * MA_L2_2_bound^2
     )
 end
 
 function step_nabla3()
     nabla_laplace_MA_C0_squared_bound = bound_nabla_laplace_MA()
-    polytope_volume = interval(BigFloat(4)) * interval(BigFloat, pi)
+    polytope_volume = interval(BigFloat(4)) * interval(BigFloat, pi)^2
     nabla_laplace_MA_L2_squared_bound = polytope_volume * nabla_laplace_MA_C0_squared_bound
     nabla3_L2_bound = nabla_3_from_laplace_bound(nabla_laplace_MA_L2_squared_bound)
 

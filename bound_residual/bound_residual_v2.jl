@@ -36,7 +36,7 @@ end
 Run the default residual-bound computation from the command line.
 """
 function main()
-    setprecision(BigFloat, 100)
+    setprecision(BigFloat, 200)
     compute_bound_residual_v2(U0_PATH; pdeg = 240)
 end
 
