@@ -284,9 +284,11 @@ function step5_compute_residual_bound_by_MVT(H_coeffs::AbstractMatrix{<:Number},
     MAp0 = evaluate_coeffs_at_point(G_coeffs, midpoint, midpoint) * exp(evaluate_coeffs_at_point(H_coeffs, midpoint, midpoint))
     d = sqrt(interval(BigFloat(1)) / exact(4) + interval(BigFloat(1)) / exact(4))
     residual = abs(MAp0 - exact(1)) + dMA_bound * d
-    polytope_volume_sqrt = interval(BigFloat(2)) * interval(BigFloat, pi)
+
+    # volume of one torus fibre is 4pi^2, volume of whole manifold 12pi^2
+    manifold_volume_sqrt = sqrt(interval(BigFloat(12)) * interval(BigFloat, pi)^2)
     write_bound_entry("ma_residual_bounds", "C0", residual)
-    write_bound_entry("ma_sobolev_bounds", "L2", polytope_volume_sqrt * residual)
+    write_bound_entry("ma_sobolev_bounds", "L2", manifold_volume_sqrt * residual)
 
     return (;
         residual_bound = residual
@@ -298,7 +300,7 @@ end
 Compute the first covariant derivative bound for `u = MA`.
 
 We bound the pointwise squared norm by
-`|nabla u|^2 = G^{ij} d_i u d_j u`, then multiply by `4*pi^2` and
+`|nabla u|^2 = G^{ij} d_i u d_j u`, then multiply by `12*pi^2` and
 take the square root to get an `L^2` norm bound.
 """
 function step_nabla()
@@ -315,7 +317,7 @@ function step_nabla()
     end
 
     nabla_MA_L2_bound = sqrt(
-        interval(BigFloat(4)) *
+        interval(BigFloat(12)) *
         interval(BigFloat, pi)^2 *
         nabla_MA_C0_squared_bound
     )
@@ -358,7 +360,7 @@ end
 function step_nabla2()
     laplace_MA_C0_bound = bound_laplace_MA()
     laplace_MA_L2_bound = sqrt(
-        interval(BigFloat(4)) *
+        interval(BigFloat(12)) *
         interval(BigFloat, pi)^2 *
         laplace_MA_C0_bound^2
     )
@@ -463,8 +465,8 @@ end
 
 function step_nabla3()
     nabla_laplace_MA_C0_squared_bound = bound_nabla_laplace_MA()
-    polytope_volume = interval(BigFloat(4)) * interval(BigFloat, pi)^2
-    nabla_laplace_MA_L2_squared_bound = polytope_volume * nabla_laplace_MA_C0_squared_bound
+    manifold_volume = interval(BigFloat(12)) * interval(BigFloat, pi)^2
+    nabla_laplace_MA_L2_squared_bound = manifold_volume * nabla_laplace_MA_C0_squared_bound
     nabla3_L2_bound = nabla_3_from_laplace_bound(nabla_laplace_MA_L2_squared_bound)
 
     write_bound_entry("ma_sobolev_bounds", "nabla3_L2", nabla3_L2_bound)
