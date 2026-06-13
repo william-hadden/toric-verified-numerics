@@ -285,6 +285,7 @@ function step5_compute_residual_bound_by_MVT(H_coeffs::AbstractMatrix{<:Number},
     d = sqrt(interval(BigFloat(1)) / exact(4) + interval(BigFloat(1)) / exact(4))
     residual = abs(MAp0 - exact(1)) + dMA_bound * d
     polytope_volume_sqrt = interval(BigFloat(2)) * interval(BigFloat, pi)
+    write_bound_entry("ma_residual_bounds", "C0", residual)
     write_bound_entry("ma_sobolev_bounds", "L2", polytope_volume_sqrt * residual)
 
     return (;
