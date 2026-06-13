@@ -95,5 +95,4 @@ function get_injectivity_constant(; path::AbstractString = VERIFIED_BOUNDS_PATH)
         Cl_L2_5_estimate_u_term / lambda_1
 
     write_bound_entry("fixed_point_bounds", "injectivity_constant", Cr_const_injectivity_estimate; path)
-    return nothing
 end
