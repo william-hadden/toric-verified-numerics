@@ -21,6 +21,8 @@ const INVERSE_PDEG = 20
 const INVERSE_SUBDIVISIONS = 8
 const RICCI_PDEG = 10
 const RICCI_SUBDIVISIONS = 4
+const RICCI_LOWER_PDEG = 20
+const RICCI_LOWER_SUBDIVISIONS = 30
 const RIEMANN_PDEG = 10
 const RIEMANN_SUBDIVISIONS = 4
 const NABLA_RIEMANN_PDEG = 10
@@ -29,10 +31,11 @@ const NABLA2_RIEMANN_PDEG = 10
 const NABLA2_RIEMANN_SUBDIVISIONS = 4
 
 const INVERSE_DERIVATIVE_PRODUCT_STEPS = 144
-const RICCI_NUMERATOR_PRODUCT_STEPS = 144
-const RIEMANN_NUMERATOR_PRODUCT_STEPS = 144
-const COV_RIEMANN_NUMERATOR_PRODUCT_STEPS = 852
-const COV_COV_RIEMANN_NUMERATOR_PRODUCT_STEPS = 4036
+const RICCI_NUMERATOR_PRODUCT_STEPS = 65
+const RICCI_LOWER_NUMERATOR_PRODUCT_STEPS = 152
+const RIEMANN_NUMERATOR_PRODUCT_STEPS = 136
+const COV_RIEMANN_NUMERATOR_PRODUCT_STEPS = 936
+const COV_COV_RIEMANN_NUMERATOR_PRODUCT_STEPS = 8132
 
 const METRIC_COMPONENTS = Dict(
     "xx" => (1, 1),
@@ -145,6 +148,8 @@ function run_verified_bounds_pipeline(;
     inverse_subdivisions::Integer = INVERSE_SUBDIVISIONS,
     ricci_pdeg::Integer = RICCI_PDEG,
     ricci_subdivisions::Integer = RICCI_SUBDIVISIONS,
+    ricci_lower_pdeg::Integer = RICCI_LOWER_PDEG,
+    ricci_lower_subdivisions::Integer = RICCI_LOWER_SUBDIVISIONS,
     riemann_pdeg::Integer = RIEMANN_PDEG,
     riemann_subdivisions::Integer = RIEMANN_SUBDIVISIONS,
     nabla_riemann_pdeg::Integer = NABLA_RIEMANN_PDEG,
@@ -208,6 +213,32 @@ function run_verified_bounds_pipeline(;
         progress = ricci_box_progress,
     )
     finish_progress!(ricci_box_progress)
+
+    println()
+    println("Computing Ricci lower bound ...")
+    ricci_lower_progress =
+        start_progress("Ricci-minus-identity numerator products", RICCI_LOWER_NUMERATOR_PRODUCT_STEPS)
+    ricci_lower_coeffs =
+        compute_ricci_minus_identity_numerator_truncated_coefficient_space(
+            step3;
+            pdeg = ricci_lower_pdeg,
+            progress = ricci_lower_progress,
+        )
+    finish_progress!(ricci_lower_progress)
+
+    ricci_lower_box_progress =
+        start_progress(
+            "Ricci lower-bound subdivision boxes",
+            ricci_lower_subdivisions * ricci_lower_subdivisions,
+        )
+    ricci_lower_bounds = compute_ricci_minus_identity_bound_by_local_subdivision_truncated(
+        ricci_lower_coeffs;
+        pdeg = ricci_lower_pdeg,
+        nx = ricci_lower_subdivisions,
+        ny = ricci_lower_subdivisions,
+        progress = ricci_lower_box_progress,
+    )
+    finish_progress!(ricci_lower_box_progress)
 
     println()
     println("Computing Riemann bound ...")
@@ -282,6 +313,7 @@ function run_verified_bounds_pipeline(;
     metric_inverse = metric_inverse_json(inverse_bounds.derivative_bounds)
     curvature_bounds = Dict{String,Any}(
         "ricci_C0" => serialize_bound_value(ricci_bounds.ricci_norm_bound),
+        "ricci_lower_bound" => serialize_bound_value(ricci_lower_bounds.ricci_lower_bound),
         "riemann_C0" => serialize_bound_value(riem_bounds.riem_norm_bound),
         "nabla_riemann_C0" => serialize_bound_value(cov_riem_bounds.cov_riem_norm_bound),
         "nabla2_riemann_C0" => serialize_bound_value(cov_cov_riem_bounds.cov_cov_riem_norm_bound),
@@ -294,6 +326,7 @@ function run_verified_bounds_pipeline(;
     return (;
         inverse_bounds,
         ricci_bounds,
+        ricci_lower_bounds,
         riem_bounds,
         cov_riem_bounds,
         cov_cov_riem_bounds,
@@ -304,6 +337,8 @@ function run_verified_bounds_pipeline(;
             inverse_subdivisions,
             ricci_pdeg,
             ricci_subdivisions,
+            ricci_lower_pdeg,
+            ricci_lower_subdivisions,
             riemann_pdeg,
             riemann_subdivisions,
             nabla_riemann_pdeg,
@@ -322,6 +357,8 @@ function main()
 #     inverse_subdivisions = 8,
 #     ricci_pdeg = 12,
 #     ricci_subdivisions = 6,
+#     ricci_lower_pdeg = 12,
+#     ricci_lower_subdivisions = 6,
 #     riemann_pdeg = 10,
 #     riemann_subdivisions = 4,
 #     nabla_riemann_pdeg = 8,

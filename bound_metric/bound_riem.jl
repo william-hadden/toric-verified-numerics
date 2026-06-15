@@ -39,7 +39,7 @@ function bound_riem_subdivision_local(
     finish_progress!(step3_progress)
     println("Step 3: Build inverse metric coefficient arrays ... ok")
 
-    step4_progress = start_progress("Step 4: Riemmanian numerator products", 120)
+    step4_progress = start_progress("Step 4: Riemmanian numerator products", 136)
     step4 = compute_riem_numerators_truncated_coeff_space(step3; progress = step4_progress, pdeg)
     finish_progress!(step4_progress)
     println("Step 4: Build Ricci numerator coefficient arrays ... ok")
@@ -98,7 +98,7 @@ function bound_cov_riem_subdivision_local(
     finish_progress!(step3_progress)
     println("Step 3: Build inverse metric coefficient arrays ... ok")
 
-    step4_progress = start_progress("Step 4: Cov Riemmanian numerator products", 552)
+    step4_progress = start_progress("Step 4: Cov Riemmanian numerator products", 936)
     step4 = compute_inverse_derivative_numerator_components_truncated_coeff_space(step3;k = 3, pdeg, progress = step4_progress,)
     finish_progress!(step4_progress)
     println("Step 4: Build cov riem numerator coefficient arrays ... ok")
@@ -157,7 +157,7 @@ function bound_cov_cov_riem_subdivision_local(
     finish_progress!(step3_progress)
     println("Step 3: Build inverse metric coefficient arrays ... ok")
 
-    step4_progress = start_progress("Step 4:Cov Cov Riemmanian numerator products", 4036)
+    step4_progress = start_progress("Step 4:Cov Cov Riemmanian numerator products", 8132)
     step4 = compute_inverse_derivative_numerator_components_truncated_coeff_space(step3;k = 4, pdeg, progress = step4_progress,)
     finish_progress!(step4_progress)
     println("Step 4: Build cov riem numerator coefficient arrays ... ok")
