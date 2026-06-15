@@ -34,8 +34,8 @@ const INVERSE_DERIVATIVE_PRODUCT_STEPS = 144
 const RICCI_NUMERATOR_PRODUCT_STEPS = 65
 const RICCI_LOWER_NUMERATOR_PRODUCT_STEPS = 152
 const RIEMANN_NUMERATOR_PRODUCT_STEPS = 136
-const COV_RIEMANN_NUMERATOR_PRODUCT_STEPS = 936
-const COV_COV_RIEMANN_NUMERATOR_PRODUCT_STEPS = 8132
+const NABLA_RIEMANN_NUMERATOR_PRODUCT_STEPS = 936
+const NABLA_NABLA_RIEMANN_NUMERATOR_PRODUCT_STEPS = 8132
 
 const METRIC_COMPONENTS = Dict(
     "xx" => (1, 1),
@@ -265,7 +265,7 @@ function run_verified_bounds_pipeline(;
     println()
     println("Computing covariant Riemann bound ...")
     cov_riem_progress =
-        start_progress("Covariant Riemann numerator products", COV_RIEMANN_NUMERATOR_PRODUCT_STEPS)
+        start_progress("Covariant Riemann numerator products", NABLA_RIEMANN_NUMERATOR_PRODUCT_STEPS)
     cov_riem_coeffs =
         compute_inverse_derivative_numerator_components_truncated_coeff_space(
             step3;
@@ -289,7 +289,7 @@ function run_verified_bounds_pipeline(;
     println()
     println("Computing second covariant Riemann bound ...")
     cov_cov_riem_progress =
-        start_progress("Second covariant Riemann numerator products", COV_COV_RIEMANN_NUMERATOR_PRODUCT_STEPS)
+        start_progress("Second covariant Riemann numerator products", NABLA_NABLA_RIEMANN_NUMERATOR_PRODUCT_STEPS)
     cov_cov_riem_coeffs =
         compute_inverse_derivative_numerator_components_truncated_coeff_space(
             step3;
