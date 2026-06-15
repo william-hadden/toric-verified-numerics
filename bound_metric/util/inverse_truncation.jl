@@ -87,6 +87,17 @@ function truncate_with_derivative_tails(coeffs, pdeg::Integer)
     return (; u_trunc, step2)
 end
 
+"""
+Truncate a Chebyshev coefficient array and record a rigorous tail bound.
+
+The input coefficients are first intervalized. If `pdeg <= 0` or `pdeg` is at
+least the smaller array dimension, no truncation is performed and the returned
+tail is zero. Otherwise, the returned `coeffs` are the leading
+`pdeg x pdeg` block, and `tail` is the interval bound on all coefficients with
+at least one index outside that block.
+
+Returns `(; coeffs, tail, pdeg)`.
+"""
 function truncate_coeffs_with_tail(coeffs::AbstractMatrix, pdeg::Integer)
     coeffs = intervalize_coefficients(coeffs)
 

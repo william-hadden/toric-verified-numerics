@@ -1,3 +1,11 @@
+"""
+Evaluate a truncated Chebyshev enclosure on a subdivision box.
+
+`trunc` is expected to be a `(; coeffs, tail, pdeg)` object, such as the output
+of `truncate_coeffs_with_tail`. The retained coefficients are enclosed on the
+local interval box `xbox x ybox`, then the result is widened by the symmetric
+interval `[-tail, tail]` to account rigorously for discarded coefficients.
+"""
 function local_coeff_sum_centered_enclosure_with_tail(trunc, xbox, ybox)
     val = local_coeff_sum_centered_enclosure_cheb_2d(trunc.coeffs, xbox, ybox)
     return val + symmetric_interval(trunc.tail)
@@ -38,9 +46,13 @@ function compute_inverse_bound_by_local_subdivision_truncated(
             )
         end
 
-        u11_box_bound = sup(abs(A11_box)) / D_lower
-        u12_box_bound = sup(abs(A12_box)) / D_lower
-        u22_box_bound = sup(abs(A22_box)) / D_lower
+        u11_box = A11_box / D_box
+        u12_box = A12_box / D_box
+        u22_box = A22_box / D_box
+
+        u11_box_bound = sup(abs(u11_box))
+        u12_box_bound = sup(abs(u12_box))
+        u22_box_bound = sup(abs(u22_box))
 
         global_u11 = max(global_u11, u11_box_bound)
         global_u12 = max(global_u12, u12_box_bound)
@@ -57,6 +69,9 @@ function compute_inverse_bound_by_local_subdivision_truncated(
             A22_box,
             D_box,
             D_lower,
+            u11_box,
+            u12_box,
+            u22_box,
             u11_box_bound,
             u12_box_bound,
             u22_box_bound,

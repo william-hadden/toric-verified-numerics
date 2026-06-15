@@ -115,6 +115,16 @@ function local_power_coeffs_cheb_2d(coeffs::AbstractMatrix, xbox, ybox)
     return local2
 end
 
+"""
+Enclose a 2D Chebyshev series on a local interval box by coefficient summation.
+
+The Chebyshev series is first rewritten as a power series in local coordinates
+centered on `xbox x ybox`. The constant coefficient `c00` is the centered value
+part, and the sum of absolute values of all nonconstant local coefficients gives
+a rigorous remainder bound because the local coordinates range over `[-1, 1]`.
+
+Returns the interval `c00 + [-tail, tail]`.
+"""
 function local_coeff_sum_centered_enclosure_cheb_2d(coeffs::AbstractMatrix, xbox, ybox)
     local2 = local_power_coeffs_cheb_2d(coeffs, xbox, ybox)
 
