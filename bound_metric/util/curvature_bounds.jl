@@ -37,6 +37,14 @@ function truncate_enclosure_coeffs(coeffs::AbstractMatrix{<:Number}, tail, pdeg:
     return (; coeffs = trunc.coeffs, tail = old_tail + new_tail, pdeg = trunc.pdeg)
 end
 
+"""
+Add two truncated Chebyshev enclosures in coefficient space.
+
+Both inputs are expected to have the form `(; coeffs, tail, pdeg)`. The retained
+coefficient arrays are added, the existing tail bounds are summed, and the
+result is truncated again to `pdeg`, with any newly discarded coefficients added
+to the returned tail.
+"""
 function enclosure_add(f, g, pdeg::Integer)
     return truncate_enclosure_coeffs(cheb_add(f.coeffs, g.coeffs), f.tail + g.tail, pdeg)
 end
@@ -45,11 +53,32 @@ function enclosure_sub(f, g, pdeg::Integer)
     return truncate_enclosure_coeffs(cheb_sub(f.coeffs, g.coeffs), f.tail + g.tail, pdeg)
 end
 
+"""
+Scale a truncated Chebyshev enclosure by a scalar.
+
+`f` is an enclosure `(; coeffs, tail, pdeg)`. The retained coefficients are
+scaled by `c`, while the tail bound is scaled by `abs(c)` (or the supremum of
+`abs(c)` when `c` is an interval). The result is truncated again to `pdeg`,
+adding any newly discarded coefficient mass to the returned tail.
+"""
 function enclosure_scale(f, c, pdeg::Integer)
     c_abs = c isa Interval ? sup(abs(c)) : abs(c)
     return truncate_enclosure_coeffs(cheb_scale(f.coeffs, c), c_abs * f.tail, pdeg)
 end
 
+"""
+Multiply two truncated Chebyshev enclosures in coefficient space.
+
+The retained coefficient arrays are multiplied with rigorous Chebyshev
+arithmetic. The returned tail bounds all products involving at least one
+discarded part:
+
+    f_tail * ||g_coeffs|| + g_tail * ||f_coeffs|| + f_tail * g_tail.
+
+The product is then truncated to `pdeg`, adding the new truncation tail to the
+returned enclosure. If `progress` is supplied, it is advanced after the retained
+coefficient multiplication.
+"""
 function enclosure_mul(f, g, pdeg::Integer; progress = nothing)
     product_coeffs = cheb_mul_fast(f.coeffs, g.coeffs)
     advance_progress!(progress)
@@ -62,6 +91,14 @@ function enclosure_mul(f, g, pdeg::Integer; progress = nothing)
     return truncate_enclosure_coeffs(product_coeffs, product_tail, pdeg)
 end
 
+"""
+Convert a truncated Chebyshev enclosure into a coefficient matrix.
+
+The enclosure `f` has the form `(; coeffs, tail, pdeg)`. This helper returns a
+plain coefficient array by widening the constant coefficient by `[-tail, tail]`,
+so evaluating the returned series still rigorously encloses the original
+function represented by `f`.
+"""
 function enclosure_to_coeffs(f)
     return inflate_constant_mode!(f.coeffs, f.tail)
 end
@@ -191,11 +228,6 @@ function quotient_numerator_formal_terms(I)
     return terms
 end
 
-
-# ------------------------------------------------------------
-# Evaluate formal numerator using tail-summed enclosures
-# ------------------------------------------------------------
-
 function formal_term_to_enclosure(
     t,
     A_coeffs::AbstractMatrix,
@@ -221,6 +253,20 @@ function formal_term_to_enclosure(
     return out
 end
 
+"""
+Compute a rigorous truncated numerator enclosure for a derivative of `A / D`.
+
+Given Chebyshev coefficient arrays `A_coeffs` and `D_coeffs`, and a derivative
+multiindex `I`, return an enclosure for the numerator `N_I` in
+
+    ∂_I(A / D) = N_I / D^(length(I) + 1).
+
+The returned value is an enclosure `(; coeffs, tail, pdeg)`: `coeffs` contains
+the truncated Chebyshev coefficients for `N_I`, while `tail` rigorously bounds
+all discarded coefficient mass introduced by truncation and products. The
+formal quotient-rule expansion is generated symbolically from `I`, then each
+term is evaluated with cached exact derivatives of `A` and `D`.
+"""
 function quotient_derivative_numerator_enclosure(
     A_coeffs::AbstractMatrix,
     D_coeffs::AbstractMatrix,
@@ -285,7 +331,18 @@ function expand_multiindex_2d(a::Tuple{Int, Int})
 end
 
 """
-This is the equivalent of R^i{}_j{}^k{}_l=-1/2u^{jl}_{ik}
+Compute numerator enclosures for derivatives of the inverse metric entries.
+
+For each inverse metric component `u^{ij} = A^{ij} / D` and each 2D
+derivative multiindex `a = (a1, a2)` with total order at most `k`, compute a
+rigorous truncated Chebyshev enclosure for the numerator `N^{ij}_a` in
+
+    ∂_a u^{ij} = N^{ij}_a / D^(a1 + a2 + 1).
+
+The result stores these enclosures in `data[(i, j, a)]`, where each value is
+the `(; coeffs, tail, pdeg)` enclosure returned by
+`quotient_derivative_numerator_enclosure`. Symmetry is used for the off-diagonal
+inverse metric entry, so `(1, 2)` and `(2, 1)` both use `inverse_coeffs.A12`.
 """
 function compute_inverse_derivative_numerator_pack(
     inverse_coeffs;
@@ -304,7 +361,6 @@ function compute_inverse_derivative_numerator_pack(
     )
 
     D = inverse_coeffs.D
-    scale = interval_constant(-1) / exact(2)
 
     data = Dict{Tuple{Int, Int, Tuple{Int, Int}}, Any}()
 
@@ -312,15 +368,13 @@ function compute_inverse_derivative_numerator_pack(
         for a in multiindices_2d_upto(k)
             I = expand_multiindex_2d(a)
 
-            num = quotient_derivative_numerator_enclosure(
+            data[(i, j, a)] = quotient_derivative_numerator_enclosure(
                 A[(i, j)],
                 D,
                 I;
                 pdeg,
                 progress,
             )
-
-            data[(i, j, a)] = enclosure_scale(num, scale, pdeg)
         end
     end
 
@@ -330,6 +384,27 @@ function compute_inverse_derivative_numerator_pack(
     )
 end
 
+"""
+Build coefficient-space Ricci numerator data from inverse metric coefficients.
+
+For each inverse metric entry `u^{ij} = A^{ij} / D`, second derivatives have
+the form
+
+    partial_ab u^{ij} = N^{ij}_{ab} / D^3.
+
+This routine first computes the second-derivative numerator pack, then forms
+the four Ricci endomorphism numerators
+
+    R11_num, R12_num, R21_num, R22_num,
+
+so that `Rij = Rij_num / D^3`. It also forms the numerator of the pointwise
+endomorphism norm squared
+
+    ||Ric||^2 = 1/2 * (R11^2 + 2 R12 R21 + R22^2)
+
+entirely in coefficient-enclosure space before any subdivision evaluation.
+Therefore `ricci_norm_squared_num / D^6` encloses `||Ric||^2`.
+"""
 function compute_ricci_numerators_truncated_coefficient_space(
     inverse_coeffs;
     pdeg::Integer,
@@ -347,20 +422,52 @@ function compute_ricci_numerators_truncated_coefficient_space(
     U = pack.data
     D = inverse_coeffs.D
 
-    R11_num = enclosure_to_coeffs(enclosure_add(U[(1, 1, (2, 0))], U[(1, 2, (1, 1))], pdeg))
-    R12_num = enclosure_to_coeffs(enclosure_add(U[(1, 1, (1, 1))], U[(1, 2, (0, 2))], pdeg))
-    R21_num = enclosure_to_coeffs(enclosure_add(U[(1, 2, (2, 0))], U[(2, 2, (1, 1))], pdeg))
-    R22_num = enclosure_to_coeffs(enclosure_add(U[(1, 2, (1, 1))], U[(2, 2, (0, 2))], pdeg))
+    R11_enc = enclosure_add(U[(1, 1, (2, 0))], U[(1, 2, (1, 1))], pdeg)
+    R12_enc = enclosure_add(U[(1, 1, (1, 1))], U[(1, 2, (0, 2))], pdeg)
+    R21_enc = enclosure_add(U[(1, 2, (2, 0))], U[(2, 2, (1, 1))], pdeg)
+    R22_enc = enclosure_add(U[(1, 2, (1, 1))], U[(2, 2, (0, 2))], pdeg)
 
-    return (; R11_num, R12_num, R21_num, R22_num, D, pdeg, pack)
+    offdiag = enclosure_mul(R12_enc, R21_enc, pdeg; progress)
+    offdiag = enclosure_scale(offdiag, interval_constant(2), pdeg)
+
+    ricci_norm_squared_num = enclosure_add(
+        enclosure_mul(R11_enc, R11_enc, pdeg; progress),
+        offdiag,
+        pdeg,
+    )
+    ricci_norm_squared_num = enclosure_add(
+        ricci_norm_squared_num,
+        enclosure_mul(R22_enc, R22_enc, pdeg; progress),
+        pdeg,
+    )
+    ricci_norm_squared_num = enclosure_scale(ricci_norm_squared_num, interval_half(), pdeg)
+
+    return (;
+        R11_num = enclosure_to_coeffs(R11_enc),
+        R12_num = enclosure_to_coeffs(R12_enc),
+        R21_num = enclosure_to_coeffs(R21_enc),
+        R22_num = enclosure_to_coeffs(R22_enc),
+        ricci_norm_squared_num = enclosure_to_coeffs(ricci_norm_squared_num),
+        D,
+        pdeg,
+        pack,
+    )
 end
 
+"""
+Prepare Ricci numerator coefficient arrays for local subdivision evaluation.
+
+Each numerator series and the common denominator `D` are truncated to `pdeg`
+with a rigorous Chebyshev tail bound. The returned object is consumed by
+`compute_ricci_bound_by_local_subdivision_truncated`.
+"""
 function prepare_ricci_coeffs_for_subdivision(ricci_coeffs, pdeg::Integer)
     return (;
         R11_num = truncate_coeffs_with_tail(ricci_coeffs.R11_num, pdeg),
         R12_num = truncate_coeffs_with_tail(ricci_coeffs.R12_num, pdeg),
         R21_num = truncate_coeffs_with_tail(ricci_coeffs.R21_num, pdeg),
         R22_num = truncate_coeffs_with_tail(ricci_coeffs.R22_num, pdeg),
+        ricci_norm_squared_num = truncate_coeffs_with_tail(ricci_coeffs.ricci_norm_squared_num, pdeg),
         D       = truncate_coeffs_with_tail(ricci_coeffs.D, pdeg),
     )
 end
@@ -375,6 +482,19 @@ function derivative_exponent_multiindex_2d(indices::Vararg{Int})
 end
 
 
+"""
+Build coefficient arrays for third inverse-metric derivative numerators.
+
+For every component and index tuple `(i, j, k, l, m)`, the returned
+`third_deriv_pack[(i, j, k, l, m)]` is a coefficient array enclosing the
+numerator `N` in
+
+    partial_klm u^{ij} = N / D^4.
+
+This is a compatibility helper for code that needs just third derivative
+numerator coefficients. The stored numerators are the actual quotient-rule
+numerators, with no extra scale factor.
+"""
 function compute_inverse_third_derivative_numerator_components_truncated_coeff_space(
     inverse_coeffs;
     pdeg::Integer,
@@ -397,7 +517,7 @@ function compute_inverse_third_derivative_numerator_components_truncated_coeff_s
     for i in 1:2, j in 1:2, k in 1:2, l in 1:2, m in 1:2
         a = derivative_exponent_multiindex_2d(k, l, m)
 
-        third_deriv_pack[(i, j, k, l, m)] = enclosure_to_coeffs(enclosure_scale(U[(i, j, a)],exact(-2), pdeg))
+        third_deriv_pack[(i, j, k, l, m)] = enclosure_to_coeffs(U[(i, j, a)])
     end
 
     return (;
@@ -407,6 +527,22 @@ function compute_inverse_third_derivative_numerator_components_truncated_coeff_s
         pack,
     )
 end
+
+"""
+Build inverse-metric derivative numerator components up to order `k`.
+
+For each inverse metric component `u^{ij} = A^{ij} / D` and each multiindex
+`a` with `|a| <= k`, this returns `deriv_num[(i, j, a)]`, a coefficient array
+for the numerator in
+
+    partial_a u^{ij} = deriv_num[(i, j, a)] / D^(|a| + 1).
+
+When `k == 3`, it additionally builds the coefficient-space numerator for
+`||nabla Riem||^2`, whose denominator is `D^9`. When `k >= 4`, it additionally
+builds the coefficient-space numerator for `||nabla^2 Riem||^2`, whose
+denominator is `D^12`. All contractions for these norms are done with
+`enclosure_add` and `enclosure_mul` before local interval subdivision.
+"""
 function compute_inverse_derivative_numerator_components_truncated_coeff_space(
     inverse_coeffs;
     k::Integer = 3,
@@ -423,22 +559,149 @@ function compute_inverse_derivative_numerator_components_truncated_coeff_space(
     )
 
     deriv_num = Dict{Tuple{Int, Int, Tuple{Int, Int}}, Any}()
+    deriv_enc = Dict{Tuple{Int, Int, Tuple{Int, Int}}, Any}()
 
     for ((i, j, a), enc) in pack.data
-        # pack stores -1/2 * derivative numerator,
-        # so multiply by -2 to get the actual derivative numerator.
-        deriv_num[(i, j, a)] =
-            enclosure_to_coeffs(enclosure_scale(enc, exact(-2), pdeg))
+        deriv_enc[(i, j, a)] = enc
+        deriv_num[(i, j, a)] = enclosure_to_coeffs(deriv_enc[(i, j, a)])
     end
+
+    cov_riem_norm_squared_num =
+        k == 3 ? compute_cov_riem_norm_squared_numerator_coeff_space(
+            deriv_enc;
+            pdeg,
+            progress,
+        ) : nothing
+
+    cov_cov_riem_norm_squared_num =
+        k >= 4 ? compute_cov_cov_riem_norm_squared_numerator_coeff_space(
+            deriv_enc;
+            pdeg,
+            progress,
+        ) : nothing
 
     return (;
         deriv_num,
         D = inverse_coeffs.D,
         pdeg,
         pack,
+        cov_riem_norm_squared_num,
+        cov_cov_riem_norm_squared_num,
     )
 end
 
+"""
+Construct the coefficient-space numerator for `||nabla Riem||^2`.
+
+`deriv_enc` must contain Chebyshev enclosures for inverse-metric derivative
+numerators up to order three, indexed as `(i, j, a)`. The formula is assembled
+directly from those numerator enclosures using coefficient-space products and
+sums, preserving cancellations before subdivision.
+
+The returned coefficient array represents the numerator of the norm squared;
+the corresponding denominator is `D^9`.
+"""
+function compute_cov_riem_norm_squared_numerator_coeff_space(
+    deriv_enc;
+    pdeg::Integer,
+    progress = nothing,
+)
+    u(i, j) = deriv_enc[(i, j, (0, 0))]
+    du(i, j, a) = deriv_enc[(i, j, derivative_exponent_multiindex_2d(a))]
+    d2u(i, j, a, b) = deriv_enc[(i, j, derivative_exponent_multiindex_2d(a, b))]
+    d3u(i, j, a, b, c) = deriv_enc[(i, j, derivative_exponent_multiindex_2d(a, b, c))]
+
+    norm_squared_num = zero_enclosure(pdeg)
+
+    for i in 1:2, j in 1:2, k in 1:2, l in 1:2, m in 1:2, n in 1:2
+        bracket = enclosure_mul(u(m, n), d3u(i, k, j, l, n), pdeg; progress)
+        bracket = enclosure_add(
+            bracket,
+            enclosure_mul(d2u(l, k, n, l), du(m, n, j), pdeg; progress),
+            pdeg,
+        )
+        bracket = enclosure_sub(
+            bracket,
+            enclosure_mul(d2u(n, k, j, l), du(m, l, n), pdeg; progress),
+            pdeg,
+        )
+        bracket = enclosure_add(
+            bracket,
+            enclosure_mul(d2u(l, k, j, n), du(m, n, l), pdeg; progress),
+            pdeg,
+        )
+        bracket = enclosure_sub(
+            bracket,
+            enclosure_mul(d2u(l, n, j, l), du(m, k, n), pdeg; progress),
+            pdeg,
+        )
+
+        term = enclosure_mul(d3u(j, l, i, k, m), bracket, pdeg; progress)
+        norm_squared_num = enclosure_add(norm_squared_num, term, pdeg)
+    end
+
+    return enclosure_to_coeffs(norm_squared_num)
+end
+
+"""
+Construct the coefficient-space numerator for `||nabla^2 Riem||^2`.
+
+`deriv_enc` must contain Chebyshev enclosures for inverse-metric derivative
+numerators up to order four. This routine builds the left and right contracted
+factors appearing in the second covariant Riemann norm formula entirely in
+coefficient-enclosure space, then sums their products.
+
+The returned coefficient array represents the numerator of the norm squared;
+the corresponding denominator is `D^12`.
+"""
+function compute_cov_cov_riem_norm_squared_numerator_coeff_space(
+    deriv_enc;
+    pdeg::Integer,
+    progress = nothing,
+)
+    u(i, j) = deriv_enc[(i, j, (0, 0))]
+    du(i, j, a) = deriv_enc[(i, j, derivative_exponent_multiindex_2d(a))]
+    d2u(i, j, a, b) = deriv_enc[(i, j, derivative_exponent_multiindex_2d(a, b))]
+    d3u(i, j, a, b, c) = deriv_enc[(i, j, derivative_exponent_multiindex_2d(a, b, c))]
+    d4u(i, j, a, b, c, d) = deriv_enc[(i, j, derivative_exponent_multiindex_2d(a, b, c, d))]
+
+    norm_squared_num = zero_enclosure(pdeg)
+
+    for i in 1:2, j in 1:2, k in 1:2, l in 1:2
+        for m in 1:2, b in 1:2, a in 1:2, s in 1:2
+            left = enclosure_mul(du(b, m, a), d3u(i, k, j, l, m), pdeg; progress)
+            left = enclosure_add(left, enclosure_mul(u(b, m), d4u(i, k, j, l, m, a), pdeg; progress), pdeg)
+            left = enclosure_add(left, enclosure_mul(d3u(i, k, m, l, a), du(b, m, j), pdeg; progress), pdeg)
+            left = enclosure_add(left, enclosure_mul(d2u(i, k, m, l), d2u(b, m, j, a), pdeg; progress), pdeg)
+            left = enclosure_sub(left, enclosure_mul(d3u(m, k, j, l, a), du(b, i, m), pdeg; progress), pdeg)
+            left = enclosure_sub(left, enclosure_mul(d2u(m, k, j, l), d2u(b, i, m, a), pdeg; progress), pdeg)
+            left = enclosure_add(left, enclosure_mul(d3u(i, k, j, m, a), du(b, m, l), pdeg; progress), pdeg)
+            left = enclosure_add(left, enclosure_mul(d2u(i, k, j, m), d2u(b, m, l, a), pdeg; progress), pdeg)
+            left = enclosure_sub(left, enclosure_mul(d3u(i, m, j, l, a), du(b, k, m), pdeg; progress), pdeg)
+            left = enclosure_sub(left, enclosure_mul(d2u(i, m, j, l), d2u(b, k, m, a), pdeg; progress), pdeg)
+
+            right = enclosure_mul(u(a, s), d4u(j, l, i, k, b, s), pdeg; progress)
+            right = enclosure_add(right, enclosure_mul(d3u(j, l, s, k, b), du(a, s, i), pdeg; progress), pdeg)
+            right = enclosure_sub(right, enclosure_mul(d3u(a, s, i, k, b), du(j, l, s), pdeg; progress), pdeg)
+            right = enclosure_add(right, enclosure_mul(d3u(a, s, i, s, b), du(j, l, k), pdeg; progress), pdeg)
+            right = enclosure_sub(right, enclosure_mul(d3u(j, s, i, k, b), du(a, s, l), pdeg; progress), pdeg)
+
+            term = enclosure_mul(left, right, pdeg; progress)
+            norm_squared_num = enclosure_add(norm_squared_num, term, pdeg)
+        end
+    end
+
+    return enclosure_to_coeffs(norm_squared_num)
+end
+
+"""
+Prepare inverse-derivative and covariant-curvature numerator data for boxes.
+
+The raw derivative numerator coefficients are truncated with tails, and any
+available coefficient-space norm numerators for `||nabla Riem||^2` or
+`||nabla^2 Riem||^2` are truncated as well. This keeps the box routines from
+recomputing algebraic contractions after local interval evaluation.
+"""
 function prepare_inverse_deriv_coeffs_for_subdivision(cov_riem_coeffs, pdeg::Integer)
     deriv_num = Dict{Tuple{Int, Int, Tuple{Int, Int}}, Any}()
 
@@ -448,10 +711,30 @@ function prepare_inverse_deriv_coeffs_for_subdivision(cov_riem_coeffs, pdeg::Int
 
     return (;
         deriv_num,
+        cov_riem_norm_squared_num =
+            !hasproperty(cov_riem_coeffs, :cov_riem_norm_squared_num) ||
+            cov_riem_coeffs.cov_riem_norm_squared_num === nothing ? nothing :
+            truncate_coeffs_with_tail(cov_riem_coeffs.cov_riem_norm_squared_num, pdeg),
+        cov_cov_riem_norm_squared_num =
+            !hasproperty(cov_riem_coeffs, :cov_cov_riem_norm_squared_num) ||
+            cov_riem_coeffs.cov_cov_riem_norm_squared_num === nothing ? nothing :
+            truncate_coeffs_with_tail(cov_riem_coeffs.cov_cov_riem_norm_squared_num, pdeg),
         D = truncate_coeffs_with_tail(cov_riem_coeffs.D, pdeg),
     )
 end
 
+"""
+Certify a local-subdivision `C^0` bound for the covariant Riemann tensor.
+
+The input should come from
+`compute_inverse_derivative_numerator_components_truncated_coeff_space` with
+`k = 3`. On each subdivision box this routine verifies `D > 0`, evaluates the
+precomputed numerator for `||nabla Riem||^2`, divides by `D^9`, and records the
+largest upper bound over all boxes.
+
+Component derivative boxes are also stored for diagnostics, but the norm bound
+itself is not formed from interval-level component contractions.
+"""
 function compute_cov_riem_by_local_subdivision_truncated(
     cov_riem_coeffs;
     pdeg::Integer = 20,
@@ -499,21 +782,16 @@ function compute_cov_riem_by_local_subdivision_truncated(
         d2u(i, j, a, b) = deriv_box[(i, j, derivative_exponent_multiindex_2d(a, b))]
         d3u(i, j, a, b, c) = deriv_box[(i, j, derivative_exponent_multiindex_2d(a, b, c))]
 
-        cov_riem_norm_squared_box = interval_constant(0)
+        trunc.cov_riem_norm_squared_num === nothing && error(
+            "Covariant Riemann norm requires a coefficient-space norm numerator"
+        )
 
-        for i in 1:2, j in 1:2, k in 1:2, l in 1:2, m in 1:2, n in 1:2
-            bracket =
-                u(m, n) * d3u(i, k, j, l, n) +
-                d2u(l, k, n, l) * du(m, n, j) -
-                d2u(n, k, j, l) * du(m, l, n) +
-                d2u(l, k, j, n) * du(m, n, l) -
-                d2u(l, n, j, l) * du(m, k, n)
-
-            cov_riem_norm_squared_box +=
-                d3u(j, l, i, k, m) * bracket
-        end
-
-        cov_riem_norm_squared_box *= interval_constant(1) / exact(8)
+        cov_riem_norm_squared_num_box = local_coeff_sum_centered_enclosure_with_tail(
+            trunc.cov_riem_norm_squared_num,
+            xbox,
+            ybox,
+        )
+        cov_riem_norm_squared_box = cov_riem_norm_squared_num_box / (D_box^9)
 
         cov_riem_norm_squared_bound = sup(cov_riem_norm_squared_box)
 
@@ -535,6 +813,7 @@ function compute_cov_riem_by_local_subdivision_truncated(
             D_box,
             D_lower,
             deriv_box,
+            cov_riem_norm_squared_num_box,
             cov_riem_norm_squared_box,
             cov_riem_norm_squared_bound,
             cov_riem_norm_bound,
@@ -555,6 +834,18 @@ function compute_cov_riem_by_local_subdivision_truncated(
     )
 end
 
+"""
+Build coefficient-space Riemann numerator data from inverse metric coefficients.
+
+Second derivatives of `u^{ij}` have denominator `D^3`, so each Riemann
+component numerator stored in `Riem_num[(i, j, k, l)]` represents
+
+    Riem_{i j k l} = Riem_num[(i, j, k, l)] / D^3.
+
+The routine also constructs `riem_norm_squared_num` by contracting the Riemann
+component numerators in coefficient-enclosure space. Thus
+`riem_norm_squared_num / D^6` encloses `||Riem||^2` on subdivision boxes.
+"""
 function compute_riem_numerators_truncated_coeff_space(
     inverse_coeffs;
     pdeg::Integer,
@@ -573,6 +864,7 @@ function compute_riem_numerators_truncated_coeff_space(
     D = inverse_coeffs.D
 
     Riem_num = Dict{NTuple{4, Int}, Any}()
+    Riem_num_enclosure = Dict{NTuple{4, Int}, Any}()
 
     for i in 1:2, j in 1:2, k in 1:2, l in 1:2
         a =
@@ -580,17 +872,37 @@ function compute_riem_numerators_truncated_coeff_space(
             k == 2 && l == 2 ? (0, 2) :
             (1, 1)
 
+        Riem_num_enclosure[(i, j, k, l)] = U[(i, j, a)]
         Riem_num[(i, j, k, l)] = enclosure_to_coeffs(U[(i, j, a)])
+    end
+
+    riem_norm_squared_num = zero_enclosure(pdeg)
+
+    for i in 1:2, j in 1:2, k in 1:2, l in 1:2
+        term = enclosure_mul(
+            Riem_num_enclosure[(j, l, i, k)],
+            Riem_num_enclosure[(i, k, j, l)],
+            pdeg;
+            progress,
+        )
+        riem_norm_squared_num = enclosure_add(riem_norm_squared_num, term, pdeg)
     end
 
     return (;
         Riem_num,
+        riem_norm_squared_num = enclosure_to_coeffs(riem_norm_squared_num),
         D,
         pdeg,
         pack,
     )
 end
 
+"""
+Prepare Riemann numerator coefficient arrays for subdivision evaluation.
+
+Each component numerator, the coefficient-space norm numerator, and the common
+denominator `D` are truncated to `pdeg` with rigorous tail bounds.
+"""
 function prepare_riem_coeffs_for_subdivision(riem_coeffs, pdeg::Integer)
     Riem_num = Dict{NTuple{4, Int}, Any}()
 
@@ -601,11 +913,20 @@ function prepare_riem_coeffs_for_subdivision(riem_coeffs, pdeg::Integer)
 
     return (;
         Riem_num,
+        riem_norm_squared_num = truncate_coeffs_with_tail(riem_coeffs.riem_norm_squared_num, pdeg),
         D = truncate_coeffs_with_tail(riem_coeffs.D, pdeg),
     )
 end
 
 
+"""
+Certify a local-subdivision `C^0` bound for the Riemann tensor.
+
+For each subdivision box the routine verifies positivity of `D`, evaluates the
+precomputed coefficient-space numerator for `||Riem||^2`, and divides by
+`D^6`. Component Riemann boxes are also evaluated and stored for diagnostics.
+The global return value is the maximum certified norm bound over all boxes.
+"""
 function compute_riem_by_local_subdivision_truncated(
     riem_coeffs;
     pdeg::Integer = 20,
@@ -654,12 +975,12 @@ function compute_riem_by_local_subdivision_truncated(
             Riem_bound[key] = sup(abs(Riem_box[key]))
         end
 
-        riem_norm_squared_box = interval_constant(0)
-
-        for i in 1:2, j in 1:2, k in 1:2, l in 1:2
-            riem_norm_squared_box +=
-                Riem_box[(j, l, i, k)] * Riem_box[(i, k, j, l)] # suspect want chebmul_fast here. 
-        end
+        riem_norm_squared_num_box = local_coeff_sum_centered_enclosure_with_tail(
+            trunc.riem_norm_squared_num,
+            xbox,
+            ybox,
+        )
+        riem_norm_squared_box = riem_norm_squared_num_box / (D_box^6)
 
         riem_norm_squared_bound = sup(riem_norm_squared_box)
 
@@ -683,6 +1004,7 @@ function compute_riem_by_local_subdivision_truncated(
             D_lower,
             Riem_box,
             Riem_bound,
+            riem_norm_squared_num_box,
             riem_norm_squared_box,
             riem_norm_squared_bound,
             riem_norm_bound,
@@ -703,6 +1025,15 @@ function compute_riem_by_local_subdivision_truncated(
     )
 end
 
+"""
+Certify a local-subdivision `C^0` bound for the Ricci endomorphism.
+
+The input should come from
+`compute_ricci_numerators_truncated_coefficient_space`. On each box this
+routine evaluates the Ricci component numerators over `D^3` for diagnostics,
+and evaluates the precomputed coefficient-space numerator for `||Ric||^2` over
+`D^6` for the actual norm bound.
+"""
 function compute_ricci_bound_by_local_subdivision_truncated(
     ricci_coeffs;
     pdeg::Integer = 20,
@@ -751,12 +1082,12 @@ function compute_ricci_bound_by_local_subdivision_truncated(
         R21_bound = sup(abs(R21_box))
         R22_bound = sup(abs(R22_box))
 
-        ricci_norm_squared_box =
-            interval_constant(2) * (
-                R11_box^2 +
-                interval_constant(2) * R12_box * R21_box +
-                R22_box^2
-            )
+        ricci_norm_squared_num_box = local_coeff_sum_centered_enclosure_with_tail(
+            trunc.ricci_norm_squared_num,
+            xbox,
+            ybox,
+        )
+        ricci_norm_squared_box = ricci_norm_squared_num_box / (D_box^6)
 
         ricci_norm_squared_bound = sup(ricci_norm_squared_box)
 
@@ -793,6 +1124,7 @@ function compute_ricci_bound_by_local_subdivision_truncated(
             R12_bound,
             R21_bound,
             R22_bound,
+            ricci_norm_squared_num_box,
             ricci_norm_squared_box,
             ricci_norm_squared_bound,
             ricci_norm_bound,
@@ -817,6 +1149,119 @@ function compute_ricci_bound_by_local_subdivision_truncated(
     )
 end
 
+function zero_enclosure(pdeg::Integer)
+    return truncated_coeff_enclosure(cheb_constant(interval_constant(0)), pdeg)
+end
+
+"""
+Build the coefficient-space numerator for `||Ric - Id||^2`.
+
+Using the formula
+
+    ||Ric - Id||^2 = 1/2 * u^{ab}_{cb} u^{cd}_{ad}
+                    + 2 * u^{ml}_{ml}
+                    + 4,
+
+and the convention `partial_ab u^{ij} = N^{ij}_{ab} / D^3`, this routine forms
+a single numerator with common denominator `D^6`. The quadratic contraction,
+trace term, and powers of `D` are all assembled in coefficient-enclosure space.
+
+The returned `norm_minus_id_num` satisfies
+
+    ||Ric - Id||^2 <= norm_minus_id_num / D^6
+
+after rigorous local interval evaluation.
+"""
+function compute_ricci_minus_identity_numerator_truncated_coefficient_space(
+    inverse_coeffs;
+    pdeg::Integer,
+    progress = nothing,
+)
+    pdeg > 0 || error("Truncated Ricci lower-bound construction requires pdeg > 0")
+
+    pack = compute_inverse_derivative_numerator_pack(
+        inverse_coeffs;
+        k = 2,
+        pdeg,
+        progress,
+    )
+
+    U = pack.data
+    D_enc = truncated_coeff_enclosure(inverse_coeffs.D, pdeg)
+
+    second_num(i, j, a, b) =
+        U[(i, j, derivative_exponent_multiindex_2d(a, b))]
+
+    ricci_trace_num = Dict{Tuple{Int, Int}, Any}()
+
+    for a in 1:2, c in 1:2
+        out = zero_enclosure(pdeg)
+        for b in 1:2
+            out = enclosure_add(out, second_num(a, b, c, b), pdeg)
+        end
+        ricci_trace_num[(a, c)] = out
+    end
+
+    scalar_trace_num = zero_enclosure(pdeg)
+    for m in 1:2, l in 1:2
+        scalar_trace_num = enclosure_add(scalar_trace_num, second_num(m, l, m, l), pdeg)
+    end
+
+    quadratic_num = zero_enclosure(pdeg)
+    for a in 1:2, c in 1:2
+        term = enclosure_mul(ricci_trace_num[(a, c)], ricci_trace_num[(c, a)], pdeg; progress)
+        quadratic_num = enclosure_add(quadratic_num, term, pdeg)
+    end
+
+    D2 = enclosure_mul(D_enc, D_enc, pdeg; progress)
+    D3 = enclosure_mul(D2, D_enc, pdeg; progress)
+    D6 = enclosure_mul(D3, D3, pdeg; progress)
+
+    numerator = enclosure_scale(quadratic_num, interval_half(), pdeg)
+    numerator = enclosure_add(
+        numerator,
+        enclosure_mul(enclosure_scale(scalar_trace_num, interval_constant(2), pdeg), D3, pdeg; progress),
+        pdeg,
+    )
+    numerator = enclosure_add(
+        numerator,
+        enclosure_scale(D6, interval_constant(4), pdeg),
+        pdeg,
+    )
+
+    return (;
+        norm_minus_id_num = enclosure_to_coeffs(numerator),
+        D = inverse_coeffs.D,
+        pdeg,
+        pack,
+    )
+end
+
+"""
+Prepare the Ricci-minus-identity norm numerator for subdivision evaluation.
+
+The precomputed `norm_minus_id_num` and denominator `D` are truncated to `pdeg`
+with rigorous Chebyshev tail bounds.
+"""
+function prepare_ricci_minus_identity_coeffs_for_subdivision(norm_coeffs, pdeg::Integer)
+    return (;
+        norm_minus_id_num = truncate_coeffs_with_tail(norm_coeffs.norm_minus_id_num, pdeg),
+        D = truncate_coeffs_with_tail(norm_coeffs.D, pdeg),
+    )
+end
+
+"""
+Certify a local-subdivision `C^0` bound for the second covariant Riemann tensor.
+
+The input should come from
+`compute_inverse_derivative_numerator_components_truncated_coeff_space` with
+`k = 4`. On each box this routine verifies `D > 0`, evaluates the precomputed
+coefficient-space numerator for `||nabla^2 Riem||^2`, divides by `D^12`, and
+takes the largest upper bound over all boxes.
+
+Derivative component boxes are retained for diagnostics only; the norm
+contraction is performed before subdivision in coefficient space.
+"""
 function compute_cov_cov_riem_by_local_subdivision_truncated(
     cov_cov_riem_coeffs;
     pdeg::Integer = 20,
@@ -865,39 +1310,16 @@ function compute_cov_cov_riem_by_local_subdivision_truncated(
         d3u(i, j, a, b, c) = deriv_box[(i, j, derivative_exponent_multiindex_2d(a, b, c))]
         d4u(i, j, a, b, c, d) = deriv_box[(i, j, derivative_exponent_multiindex_2d(a, b, c, d))]
 
-        cov_cov_riem_norm_squared_box = interval_constant(0)
+        trunc.cov_cov_riem_norm_squared_num === nothing && error(
+            "Second covariant Riemann norm requires a coefficient-space norm numerator"
+        )
 
-        for i in 1:2, j in 1:2, k in 1:2, l in 1:2
-            for m in 1:2, b in 1:2, a in 1:2, s in 1:2
-
-                left =
-                    du(b, m, a) * d3u(i, k, j, l, m) +
-                    u(b, m)     * d4u(i, k, j, l, m, a) +
-
-                    d3u(i, k, m, l, a) * du(b, m, j) +
-                    d2u(i, k, m, l)    * d2u(b, m, j, a) -
-
-                    d3u(m, k, j, l, a) * du(b, i, m) -
-                    d2u(m, k, j, l)    * d2u(b, i, m, a) +
-
-                    d3u(i, k, j, m, a) * du(b, m, l) +
-                    d2u(i, k, j, m)    * d2u(b, m, l, a) -
-
-                    d3u(i, m, j, l, a) * du(b, k, m) -
-                    d2u(i, m, j, l)    * d2u(b, k, m, a)
-
-                right =
-                    u(a, s)     * d4u(j, l, i, k, b, s) +
-                    d3u(j, l, s, k, b) * du(a, s, i) -
-                    d3u(a, s, i, k, b) * du(j, l, s) +
-                    d3u(a, s, i, s, b) * du(j, l, k) -
-                    d3u(j, s, i, k, b) * du(a, s, l)
-
-                cov_cov_riem_norm_squared_box += left * right
-            end
-        end
-
-        cov_cov_riem_norm_squared_box *= interval_constant(1) / exact(16)
+        cov_cov_riem_norm_squared_num_box = local_coeff_sum_centered_enclosure_with_tail(
+            trunc.cov_cov_riem_norm_squared_num,
+            xbox,
+            ybox,
+        )
+        cov_cov_riem_norm_squared_box = cov_cov_riem_norm_squared_num_box / (D_box^12)
 
         cov_cov_riem_norm_squared_bound = sup(cov_cov_riem_norm_squared_box)
 
@@ -921,6 +1343,7 @@ function compute_cov_cov_riem_by_local_subdivision_truncated(
             D_box,
             D_lower,
             deriv_box,
+            cov_cov_riem_norm_squared_num_box,
             cov_cov_riem_norm_squared_box,
             cov_cov_riem_norm_squared_bound,
             cov_cov_riem_norm_bound,
@@ -941,6 +1364,131 @@ function compute_cov_cov_riem_by_local_subdivision_truncated(
     )
 end
 
+"""
+Certify a pointwise lower Ricci bound from `||Ric - Id||`.
+
+The input should come from
+`compute_ricci_minus_identity_numerator_truncated_coefficient_space`. On each
+subdivision box this routine evaluates `norm_minus_id_num / D^6`, takes an
+upper bound `epsilon^2` for `||Ric - Id||^2`, and records the lower pointwise
+bound
+
+    Ric >= 1 - epsilon.
+
+The returned `ricci_lower_bound` is the minimum certified lower bound over all
+boxes.
+"""
+function compute_ricci_minus_identity_bound_by_local_subdivision_truncated(
+    norm_coeffs;
+    pdeg::Integer = 20,
+    nx::Integer = 8,
+    ny::Integer = nx,
+    progress = nothing,
+)
+    trunc = prepare_ricci_minus_identity_coeffs_for_subdivision(norm_coeffs, pdeg)
+
+    xboxes = subdivide_minus_one_one(nx)
+    yboxes = subdivide_minus_one_one(ny)
+
+    global_norm_squared = big"0"
+    global_epsilon = big"0"
+    global_lower_bound = big"1"
+    global_D_lower = big"Inf"
+
+    box_results = []
+
+    for (ix, xbox) in pairs(xboxes), (iy, ybox) in pairs(yboxes)
+        D_box = local_coeff_sum_centered_enclosure_with_tail(trunc.D, xbox, ybox)
+        D_lower = inf(D_box)
+
+        if !isfinite(D_lower) || D_lower <= 0
+            error(
+                "Could not certify positivity of D on Ricci lower-bound box " *
+                "(ix=$ix, iy=$iy): D_box = $D_box, inf(D_box) = $D_lower"
+            )
+        end
+
+        norm_minus_id_num_box = local_coeff_sum_centered_enclosure_with_tail(
+            trunc.norm_minus_id_num,
+            xbox,
+            ybox,
+        )
+
+        norm_squared_box = norm_minus_id_num_box / (D_box^6)
+
+        norm_squared_bound = sup(norm_squared_box)
+
+        norm_squared_bound < 0 && error(
+            "Ricci-minus-identity norm-squared enclosure has negative upper bound: $norm_squared_box"
+        )
+
+        epsilon_bound = sup(sqrt(interval(norm_squared_bound)))
+        lower_bound = inf(interval_constant(1) - sqrt(interval(norm_squared_bound)))
+
+        global_norm_squared = max(global_norm_squared, norm_squared_bound)
+        global_epsilon = max(global_epsilon, epsilon_bound)
+        global_lower_bound = min(global_lower_bound, lower_bound)
+        global_D_lower = min(global_D_lower, D_lower)
+
+        push!(box_results, (;
+            ix,
+            iy,
+            xbox,
+            ybox,
+            D_box,
+            D_lower,
+            norm_minus_id_num_box,
+            norm_squared_box,
+            norm_squared_bound,
+            epsilon_bound,
+            lower_bound,
+        ))
+
+        advance_progress!(progress)
+    end
+
+    return (;
+        nx,
+        ny,
+        pdeg,
+        trunc,
+        box_results,
+        D_lower = global_D_lower,
+        ricci_minus_identity_norm_squared_bound = global_norm_squared,
+        epsilon_bound = global_epsilon,
+        ricci_lower_bound = global_lower_bound,
+    )
+end
+
+"""
+Print the certified Ricci lower-bound summary returned by subdivision.
+
+The summary reports the global bound for `||Ric - Id||^2`, the derived
+`epsilon`, the pointwise lower bound `Ric >= 1 - epsilon`, and the denominator
+positivity certificate.
+"""
+function print_truncated_subdivision_ricci_lower_bound_summary(step)
+    println()
+    println("Rigorous subdivision-certified lower pointwise Ricci bound:")
+    println("    boxes: $(step.nx) x $(step.ny)")
+    println("    pdeg: $(step.pdeg <= 0 ? "full" : step.pdeg)")
+    println("    ||Ric - Id||_inf^2 <= $(step.ricci_minus_identity_norm_squared_bound)")
+    println("    epsilon <= $(step.epsilon_bound)")
+    println("    Ric >= $(step.ricci_lower_bound)")
+    println()
+    println("Denominator positivity certificate:")
+    println("    inf D >= $(step.D_lower)")
+    println()
+    println("Denominator coefficient tail bound:")
+    println("    D tail <= $(step.trunc.D.tail)")
+end
+
+"""
+Print the certified `C^0` Ricci bound returned by subdivision.
+
+The summary includes the Ricci endomorphism norm bound, component-wise Ricci
+bounds, and the denominator positivity/tail certificates used by the proof.
+"""
 function print_truncated_subdivision_ricci_bound_summary(step)
     println()
     println("Rigorous subdivision-certified C^0 bound for Ricci:")
@@ -962,6 +1510,12 @@ function print_truncated_subdivision_ricci_bound_summary(step)
     println("    D tail <= $(step.trunc.D.tail)")
 end
 
+"""
+Print the certified `C^0` Riemann bound returned by subdivision.
+
+The summary reports the global `||Riem||` and `||Riem||^2` bounds together with
+the denominator positivity certificate and truncation tail for `D`.
+"""
 function print_truncated_subdivision_riem_bound_summary(step)
     println()
     println("Rigorous subdivision-certified C^0 bound for Riemann:")
@@ -977,6 +1531,12 @@ function print_truncated_subdivision_riem_bound_summary(step)
     println("    D tail <= $(step.trunc.D.tail)")
 end
 
+"""
+Print the certified `C^0` covariant Riemann bound returned by subdivision.
+
+The summary reports the global `||nabla Riem||` and squared-norm bounds, plus
+the denominator certificate and truncation tail for `D`.
+"""
 function print_truncated_subdivision_cov_riem_bound_summary(step)
     println()
     println("Rigorous subdivision-certified C^0 bound for covariant Riemann:")
@@ -992,6 +1552,12 @@ function print_truncated_subdivision_cov_riem_bound_summary(step)
     println("    D tail <= $(step.trunc.D.tail)")
 end
 
+"""
+Print the certified `C^0` second covariant Riemann bound.
+
+The summary reports the global `||nabla^2 Riem||` and squared-norm bounds, plus
+the denominator certificate and truncation tail for `D`.
+"""
 function print_truncated_subdivision_cov_cov_riem_bound_summary(step)
     println()
     println("Rigorous subdivision-certified C^0 bound for second covariant Riemann:")
