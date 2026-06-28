@@ -109,13 +109,16 @@ end
 Return the higher order erstimate constant as a function of r.
 This is called alpha_3 in theorem:fixed-point.
 """
-function get_higher_order_constant(r::Float64)
+function get_higher_order_constant(
+    r::Float64;
+    path::AbstractString = VERIFIED_BOUNDS_PATH,
+)
     r = interval(BigFloat(r))
 
     V = interval(BigFloat(12)) * interval(BigFloat, pi)^2
 
-    # Ricci lower bound
-    mu = interval(BigFloat(1)) # <-- Placeholder!!
+    curvature_bounds = read_bound("curvature_bounds"; path)
+    mu = curvature_bounds["ricci_lower_bound"]
 
     # Euclidean unit sphere volumes used in the geometric-analysis constants.
     omega_3 = interval(BigFloat(2)) * interval(BigFloat, pi)^2

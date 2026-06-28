@@ -1,6 +1,13 @@
 intervalize_coefficients(coefficients::AbstractMatrix{<:Interval}) = Matrix(coefficients)
 intervalize_coefficients(coefficients::AbstractMatrix{<:Number}) = interval.(coefficients)
 
+"""
+Create a point interval with `BigFloat` endpoints.
+
+This helper is used for constants in rigorous interval computations so integer,
+rational, and floating inputs are promoted through `BigFloat` before being
+wrapped as an `Interval`.
+"""
 interval_constant(x) = interval(BigFloat(x))
 interval_half() = interval_constant(1) / exact(2)
 interval_quarter() = interval_constant(1) / exact(4)
