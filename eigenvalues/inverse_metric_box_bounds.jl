@@ -145,3 +145,23 @@ function inverse_metric_bounds_on_lower_square_box(
     ycheb = interval_constant(2) * ysquare + interval_constant(1)
     return inverse_metric_bounds_on_chebyshev_box(oracle, xcheb, ycheb)
 end
+
+function main()
+    setprecision(BigFloat, 100)
+
+    oracle = InverseMetricBoxOracle()
+    U = inverse_metric_bounds_on_lower_square_box(
+        oracle,
+        (0 // 1, 1 // 1000),
+        (-1 // 1000, 0 // 1),
+    )
+
+    println("xx = ", U.xx)
+    println("xy = ", U.xy)
+    println("yx = ", U.yx)
+    println("yy = ", U.yy)
+end
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    main()
+end
