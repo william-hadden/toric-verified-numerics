@@ -6,8 +6,62 @@ include(joinpath(@__DIR__, "..", "assemble_matrices.jl"))
 
 midpoint(x) = Float64((inf(x) + sup(x)) / 2)
 
+function qdelta_triangulation(; delta = DEFAULT_DELTA, N::Integer = DEFAULT_N)
+    pmesh = pdelta_mesh_data(; delta, N)
+    I(x) = interval(BigFloat(x, RoundDown), BigFloat(x, RoundUp))
+    vertex_ids = Dict{Tuple{Int, Int}, Int}()
+    vertex_keys = Tuple{Int, Int}[]
+
+    function vertex_id(key)
+        if haskey(vertex_ids, key)
+            return vertex_ids[key]
+        end
+        push!(vertex_keys, key)
+        vertex_ids[key] = length(vertex_keys)
+        return length(vertex_keys)
+    end
+
+    triangles = Tuple{Int, Int, Int}[]
+    source_triangles = Int[]
+    for k in 0:5, (t, tri) in pairs(pmesh.triangles)
+        ids = ntuple(a -> vertex_id(rotkey(pmesh.node_keys[tri[a]], k)), 3)
+        push!(triangles, ids)
+        push!(source_triangles, t)
+    end
+
+    nodes = Matrix{Interval{BigFloat}}(undef, length(vertex_keys), 2)
+    for (i, key) in pairs(vertex_keys)
+        nodes[i, 1] = I(key[1] * pmesh.h)
+        nodes[i, 2] = I(key[2] * pmesh.h)
+    end
+
+    return (; nodes, triangles, source_triangles, vertex_keys)
+end
+
+function assemble_qdelta_cr_matrices(nodes, triangles, metric_integrals; delta = DEFAULT_DELTA, N::Integer = DEFAULT_N)
+    qmesh = qdelta_triangulation(; delta, N)
+    edges, triangle_edges = build_cr_edges(qmesh.triangles)
+    local_mass = [local_cr_mass_matrix(nodes, tri) for tri in triangles]
+    local_stiffness = [
+        local_cr_stiffness_matrix_from_integrals(nodes, triangles[t], metric_integrals[t])
+        for t in eachindex(triangles)
+    ]
+    mass = Dict{Tuple{Int, Int}, Interval{BigFloat}}()
+    stiffness = Dict{Tuple{Int, Int}, Interval{BigFloat}}()
+
+    for t in eachindex(qmesh.triangles)
+        source = qmesh.source_triangles[t]
+        dofs = triangle_edges[t]
+        addblock!(mass, dofs, local_mass[source])
+        addblock!(stiffness, dofs, local_stiffness[source])
+    end
+
+    return (; matrix_size = length(edges), edges, mass, stiffness)
+end
+
 function midpoint_eigenpairs(k = 8)
-    nodes, triangles = get_pdelta_triangulation()
+    pmesh = pdelta_mesh_data()
+    nodes, triangles = pmesh.nodes, pmesh.triangles
     println("assembling full midpoint eigenproblem for visualisation")
     metric_integrals = metric_integrals_on_pdelta_triangulation(nodes, triangles)
     assembly = assemble_qdelta_cr_matrices(nodes, triangles, metric_integrals)

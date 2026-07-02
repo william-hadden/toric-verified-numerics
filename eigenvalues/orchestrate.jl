@@ -32,25 +32,7 @@ function read_mat4_variables(path)
     return vars
 end
 
-function parse_decimal_interval(s)
-    lower = setrounding(BigFloat, RoundDown) do
-        parse(BigFloat, s)
-    end
-    upper = setrounding(BigFloat, RoundUp) do
-        parse(BigFloat, s)
-    end
-    return interval(lower, upper)
-end
-
 rational_interval(p, q) = interval(BigFloat(p)) / interval(BigFloat(q))
-
-function assemble_eigenvalue_matrices()
-    nodes, triangles = get_pdelta_triangulation()
-    metric_integrals = metric_integrals_on_pdelta_triangulation(nodes, triangles)
-    assembly = assemble_d6_invariant_cr_matrices(nodes, triangles, metric_integrals)
-    write_matlab_matrices(assembly)
-    return assembly
-end
 
 function run_matlab_verified_eigenvalue()
     env = copy(ENV)
@@ -65,7 +47,7 @@ function read_lambda_1_delta_lower_bound()
 end
 
 function theorem_rhs_upper_bound(bounds)
-    Kminus = parse_decimal_interval(bounds["curvature_bounds"]["ricci_lower_bound"])
+    Kminus = BoundIO.parse_bound_value(bounds["curvature_bounds"]["ricci_lower_bound"])
     delta = rational_interval(numerator(DEFAULT_DELTA), denominator(DEFAULT_DELTA))
     lambda = interval(BigFloat(5))
 
@@ -100,7 +82,10 @@ function update_verified_bounds(lambda_1_delta_lower_bound::Float64)
 end
 
 function run_orchestration()
-    assemble_eigenvalue_matrices()
+    pmesh = pdelta_mesh_data()
+    metric_integrals = metric_integrals_on_pdelta_triangulation(pmesh.nodes, pmesh.triangles)
+    assembly = assemble_d6_invariant_cr_matrices(pmesh.nodes, pmesh.triangles, metric_integrals)
+    write_matlab_matrices(assembly)
     run_matlab_verified_eigenvalue()
     update_verified_bounds(read_lambda_1_delta_lower_bound())
 end

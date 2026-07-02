@@ -68,6 +68,10 @@ if test_filter in ("all", "inverse")
     include(joinpath(@__DIR__, "inverse_tests.jl"))
 end
 
+if test_filter in ("all", "eigenvalues")
+    include(joinpath(@__DIR__, "eigenvalue_assembly_tests.jl"))
+end
+
 if test_filter in ("all", "cheb")
 
 @testset "2D Chebyshev multiplication via DCT" begin

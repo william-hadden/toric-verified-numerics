@@ -18,9 +18,7 @@ K = infsup(sparse(S.i, S.j, S.lo, S.n, S.n), sparse(S.i, S.j, S.hi, S.n, S.n));
 S = load(fullfile(dir, 'mass_matrix.mat'));
 M = infsup(sparse(S.i, S.j, S.lo, S.n, S.n), sparse(S.i, S.j, S.hi, S.n, S.n));
 
-tic
-[lambda, ind] = veigs(K, M, 2, 'sa');
-elapsed = toc;
+[lambda, ~] = veigs(K, M, 2, 'sa');
 
 lambda_lb = inf(lambda(2));
 

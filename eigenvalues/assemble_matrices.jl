@@ -9,27 +9,6 @@ include(joinpath(@__DIR__, "inverse_metric_box_bounds_v2.jl"))
 const DEFAULT_DELTA = 1 // 20000
 const DEFAULT_N = 14
 
-hex_rotation_matrix(k) = [0 -1; 1 1]^mod(k, 6)
-
-function rotate_hex_point((x, y), k)
-    A = hex_rotation_matrix(k)
-    return (A[1, 1] * x + A[1, 2] * y, A[2, 1] * x + A[2, 2] * y)
-end
-
-function rotate_hex_nodes(nodes, k)
-    rotated = similar(nodes)
-    for i in axes(nodes, 1)
-        rotated[i, 1], rotated[i, 2] = rotate_hex_point((nodes[i, 1], nodes[i, 2]), k)
-    end
-    return rotated
-end
-
-function rotate_contravariant_tensor(U, k)
-    A = hex_rotation_matrix(k)
-    V = A * [U.xx U.xy; U.yx U.yy] * transpose(A)
-    return (; xx = V[1, 1], xy = V[1, 2], yx = V[2, 1], yy = V[2, 2])
-end
-
 physical_metric_components(U) = (; xx = U.xx, xy = -U.xy, yx = -U.yx, yy = U.yy)
 
 """
@@ -69,73 +48,6 @@ function pdelta_mesh_data(; delta = DEFAULT_DELTA, N::Integer = DEFAULT_N)
     end
 
     return (; nodes, triangles, node_keys, h)
-end
-
-function get_pdelta_triangulation(; delta = DEFAULT_DELTA, N::Integer = DEFAULT_N)
-    mesh = pdelta_mesh_data(; delta, N)
-    return mesh.nodes, mesh.triangles
-end
-
-function qdelta_triangulation(; delta = DEFAULT_DELTA, N::Integer = DEFAULT_N)
-    pmesh = pdelta_mesh_data(; delta, N)
-    I(x) = interval(BigFloat(x, RoundDown), BigFloat(x, RoundUp))
-    vertex_ids = Dict{Tuple{Int, Int}, Int}()
-    vertex_keys = Tuple{Int, Int}[]
-
-    function vertex_id(key)
-        if haskey(vertex_ids, key)
-            return vertex_ids[key]
-        end
-        push!(vertex_keys, key)
-        vertex_ids[key] = length(vertex_keys)
-        return length(vertex_keys)
-    end
-
-    triangles = Tuple{Int, Int, Int}[]
-    source_triangles = Int[]
-    for k in 0:5, (t, tri) in pairs(pmesh.triangles)
-        ids = ntuple(a -> vertex_id(rotate_hex_point(pmesh.node_keys[tri[a]], k)), 3)
-        push!(triangles, ids)
-        push!(source_triangles, t)
-    end
-
-    nodes = Matrix{Interval{BigFloat}}(undef, length(vertex_keys), 2)
-    for (i, key) in pairs(vertex_keys)
-        nodes[i, 1] = I(key[1] * pmesh.h)
-        nodes[i, 2] = I(key[2] * pmesh.h)
-    end
-
-    return (; nodes, triangles, source_triangles, vertex_keys)
-end
-
-"""
-Compute interval bounds for the inverse metric on one triangle of P_delta.
-
-The triangle is enclosed in an axis-aligned interval box in the lower-square
-coordinates, and `inverse_metric_bounds_on_lower_square_box_v2` is called on that
-box. The return value contains only the four interval tensor entries needed by
-stiffness assembly: `xx`, `xy`, `yx`, and `yy`.
-"""
-function metric_bound_for_single_triangle(oracle, nodes, tri)
-    xs = nodes[collect(tri), 1]
-    ys = nodes[collect(tri), 2]
-    xbox = hull(hull(xs[1], xs[2]), xs[3])
-    ybox = hull(hull(ys[1], ys[2]), ys[3])
-
-    return physical_metric_components(inverse_metric_bounds_on_lower_square_box_v2(oracle, xbox, ybox))
-end
-
-"""
-Compute inverse-metric interval bounds for every triangle in a P_delta mesh.
-
-`nodes` and `triangles` are the output of `get_pdelta_triangulation`. The
-inverse-metric oracle is built once and reused for all triangles. The returned
-vector has the same order as `triangles`; entry `k` contains interval bounds
-`xx`, `xy`, `yx`, and `yy` for `triangles[k]`.
-"""
-function metric_bounds_on_pdelta_triangulation(nodes, triangles)
-    oracle = InverseMetricBoxOracleV2()
-    return [metric_bound_for_single_triangle(oracle, nodes, tri) for tri in triangles]
 end
 
 function poly_trim_with_tail(A, deg::Integer)
@@ -336,23 +248,6 @@ function local_cr_mass_matrix(nodes, tri)
     return M
 end
 
-function local_cr_stiffness_matrix(nodes, tri, U)
-    area = triangle_area(nodes, tri)
-    G = cr_gradients(nodes, tri)
-    K = fill(zero(area), 3, 3)
-
-    for a in 1:3, b in 1:3
-        K[a, b] = area * (
-            G[a, 1] * U.xx * G[b, 1] +
-            G[a, 1] * U.xy * G[b, 2] +
-            G[a, 2] * U.yx * G[b, 1] +
-            G[a, 2] * U.yy * G[b, 2]
-        )
-    end
-
-    return K
-end
-
 function local_cr_stiffness_matrix_from_integrals(nodes, tri, U)
     G = cr_gradients(nodes, tri)
     K = fill(zero(U.xx), 3, 3)
@@ -467,58 +362,7 @@ function assemble_d6_invariant_cr_matrices(nodes, triangles, metric_integrals; d
         addblock!(stiffness, dofs, local_stiffness[t])
     end
 
-    return (;
-        nodes,
-        triangles,
-        edges,
-        triangle_edges,
-        quotient,
-        matrix_size = maximum(quotient),
-        mass,
-        stiffness,
-        local_mass,
-        local_stiffness,
-    )
-end
-
-function assemble_qdelta_cr_matrices(nodes, triangles, metric_integrals; delta = DEFAULT_DELTA, N::Integer = DEFAULT_N)
-    qmesh = qdelta_triangulation(; delta, N)
-    edges, triangle_edges = build_cr_edges(qmesh.triangles)
-    local_mass = [local_cr_mass_matrix(nodes, tri) for tri in triangles]
-    local_stiffness = [
-        local_cr_stiffness_matrix_from_integrals(nodes, triangles[t], metric_integrals[t])
-        for t in eachindex(triangles)
-    ]
-    mass = Dict{Tuple{Int, Int}, Interval{BigFloat}}()
-    stiffness = Dict{Tuple{Int, Int}, Interval{BigFloat}}()
-    element_mass = Matrix{Interval{BigFloat}}[]
-    element_stiffness = Matrix{Interval{BigFloat}}[]
-
-    for t in eachindex(qmesh.triangles)
-        source = qmesh.source_triangles[t]
-        dofs = triangle_edges[t]
-        M = local_mass[source]
-        K = local_stiffness[source]
-        push!(element_mass, M)
-        push!(element_stiffness, K)
-        addblock!(mass, dofs, M)
-        addblock!(stiffness, dofs, K)
-    end
-
-    return (;
-        nodes = qmesh.nodes,
-        triangles = qmesh.triangles,
-        source_triangles = qmesh.source_triangles,
-        edges,
-        triangle_edges,
-        matrix_size = length(edges),
-        mass,
-        stiffness,
-        local_mass,
-        local_stiffness,
-        element_mass,
-        element_stiffness,
-    )
+    return (; matrix_size = maximum(quotient), mass, stiffness)
 end
 
 float_down(x) = Float64(x, RoundDown)
@@ -559,7 +403,7 @@ function symmetrize_entries(A)
 end
 
 function write_matlab_matrices(assembly; dir = @__DIR__)
-    n = hasproperty(assembly, :matrix_size) ? assembly.matrix_size : length(assembly.edges)
+    n = assembly.matrix_size
     savematrix(joinpath(dir, "stiff_matrix.mat"), symmetrize_entries(assembly.stiffness), n)
     savematrix(joinpath(dir, "mass_matrix.mat"), symmetrize_entries(assembly.mass), n)
 end
@@ -568,28 +412,12 @@ end
 Assemble the D6-invariant CR eigenvalue problem and write MATLAB input files.
 """
 function main(; delta = DEFAULT_DELTA, N::Integer = DEFAULT_N)
-    nodes, triangles = get_pdelta_triangulation(; delta, N)
-    println("P_delta triangulation: $(size(nodes, 1)) nodes, $(length(triangles)) triangles")
-
-    elapsed = @elapsed metric_integrals = metric_integrals_on_pdelta_triangulation(nodes, triangles)
-    println("metric integrals computed in $(round(elapsed; digits = 3)) seconds")
-
-    println("max width int_xx <= $(maximum(sup(U.xx) - inf(U.xx) for U in metric_integrals))")
-    println("max width int_xy <= $(maximum(sup(U.xy) - inf(U.xy) for U in metric_integrals))")
-    println("max width int_yx <= $(maximum(sup(U.yx) - inf(U.yx) for U in metric_integrals))")
-    println("max width int_yy <= $(maximum(sup(U.yy) - inf(U.yy) for U in metric_integrals))")
-
+    pmesh = pdelta_mesh_data(; delta, N)
+    nodes, triangles = pmesh.nodes, pmesh.triangles
+    metric_integrals = metric_integrals_on_pdelta_triangulation(nodes, triangles)
     assembly = assemble_d6_invariant_cr_matrices(nodes, triangles, metric_integrals; delta, N)
-    println("D6-invariant CR matrices: $(assembly.matrix_size) x $(assembly.matrix_size)")
-    println("sector CR edges before quotient: $(length(assembly.edges))")
-    println("mass stored entries: $(length(assembly.mass))")
-    println("stiffness stored entries: $(length(assembly.stiffness))")
-
     write_matlab_matrices(assembly)
-    println("wrote ", joinpath(@__DIR__, "stiff_matrix.mat"))
-    println("wrote ", joinpath(@__DIR__, "mass_matrix.mat"))
-
-    return (; nodes, triangles, metric_integrals, assembly)
+    return assembly
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

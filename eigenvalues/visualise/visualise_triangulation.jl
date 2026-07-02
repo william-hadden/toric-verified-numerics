@@ -103,8 +103,8 @@ function write_triangulation_plots(nodes, triangles; outdir = @__DIR__)
 end
 
 function main()
-    nodes, triangles = get_pdelta_triangulation()
-    paths = write_triangulation_plots(nodes, triangles)
+    pmesh = pdelta_mesh_data()
+    paths = write_triangulation_plots(pmesh.nodes, pmesh.triangles)
     println("wrote ", paths.p_path)
     println("wrote ", paths.q_path)
 end
