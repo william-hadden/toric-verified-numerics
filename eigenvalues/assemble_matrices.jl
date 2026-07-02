@@ -6,6 +6,9 @@ setprecision(BigFloat, 100)
 
 include(joinpath(@__DIR__, "inverse_metric_box_bounds_v2.jl"))
 
+const DEFAULT_DELTA = 1 // 20000
+const DEFAULT_N = 14
+
 hex_rotation_matrix(k) = [0 -1; 1 1]^mod(k, 6)
 
 function rotate_hex_point((x, y), k)
@@ -33,19 +36,17 @@ physical_metric_components(U) = (; xx = U.xx, xy = -U.xy, yx = -U.yx, yy = U.yy)
 Return a hardcoded interval triangulation of P_delta.
 
 Here P is the lower-square fundamental triangle with vertices (0, 0), (1, 0),
-and (1, -1). For now delta is fixed to 0.1, so P_delta has vertices (0, 0),
-(0.9, 0), and (0.9, -0.9). The hardcoded mesh uses N = 14 uniform lattice
-steps along each edge, giving 196 triangles.
+and (1, -1). The default inset is delta = 1/20000, and the default mesh uses
+N = 14 uniform lattice steps along each edge, giving 196 triangles.
 
 The returned `nodes` is an n x 2 matrix of interval coordinates, and
 `triangles` is a vector of triples of node indices. All geometric coordinates
 are intervals so later mesh-generation and inset operations can preserve
 outward containment without changing the assembly API.
 """
-function pdelta_mesh_data()
-    N = 14
+function pdelta_mesh_data(; delta = DEFAULT_DELTA, N::Integer = DEFAULT_N)
     I(x) = interval(BigFloat(x, RoundDown), BigFloat(x, RoundUp))
-    h = 9 // (10 * N)
+    h = (1 - delta) // N
     index(i, j) = i * (i + 1) ÷ 2 + j + 1
 
     nodes = Matrix{Interval{BigFloat}}(undef, (N + 1) * (N + 2) ÷ 2, 2)
@@ -70,13 +71,13 @@ function pdelta_mesh_data()
     return (; nodes, triangles, node_keys, h)
 end
 
-function get_pdelta_triangulation()
-    mesh = pdelta_mesh_data()
+function get_pdelta_triangulation(; delta = DEFAULT_DELTA, N::Integer = DEFAULT_N)
+    mesh = pdelta_mesh_data(; delta, N)
     return mesh.nodes, mesh.triangles
 end
 
-function qdelta_triangulation()
-    pmesh = pdelta_mesh_data()
+function qdelta_triangulation(; delta = DEFAULT_DELTA, N::Integer = DEFAULT_N)
+    pmesh = pdelta_mesh_data(; delta, N)
     I(x) = interval(BigFloat(x, RoundDown), BigFloat(x, RoundUp))
     vertex_ids = Dict{Tuple{Int, Int}, Int}()
     vertex_keys = Tuple{Int, Int}[]
@@ -400,8 +401,88 @@ function addblock!(A, dofs, B)
     end
 end
 
-function assemble_qdelta_cr_matrices(nodes, triangles, metric_integrals)
-    qmesh = qdelta_triangulation()
+rotkey((a, b), k) = k == 0 ? (a, b) : rotkey((-b, a + b), k - 1)
+sector_reflect_key((a, b)) = (a, -a - b)
+
+function edge_key_sums(edges, vertex_keys)
+    return [
+        (vertex_keys[i][1] + vertex_keys[j][1], vertex_keys[i][2] + vertex_keys[j][2])
+        for (i, j) in edges
+    ]
+end
+
+function quotient_map(n::Integer, pairs)
+    parent = collect(1:n)
+
+    function find_root(i)
+        while parent[i] != i
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        end
+        return i
+    end
+
+    for (i, j) in pairs
+        ri, rj = find_root(i), find_root(j)
+        ri == rj || (parent[rj] = ri)
+    end
+
+    root_ids = Dict{Int, Int}()
+    return [get!(root_ids, find_root(i), length(root_ids) + 1) for i in 1:n]
+end
+
+function d6_sector_edge_quotient(edges, vertex_keys)
+    sums = edge_key_sums(edges, vertex_keys)
+    edge_id = Dict(sums[i] => i for i in eachindex(sums))
+    pairs = Tuple{Int, Int}[]
+
+    for i in eachindex(sums)
+        reflected = sector_reflect_key(sums[i])
+        haskey(edge_id, reflected) && push!(pairs, (i, edge_id[reflected]))
+
+        if sums[i][2] == -sums[i][1]
+            rotated = rotkey(sums[i], 1)
+            haskey(edge_id, rotated) && push!(pairs, (i, edge_id[rotated]))
+        end
+    end
+
+    return quotient_map(length(edges), pairs)
+end
+
+function assemble_d6_invariant_cr_matrices(nodes, triangles, metric_integrals; delta = DEFAULT_DELTA, N::Integer = DEFAULT_N)
+    pmesh = pdelta_mesh_data(; delta, N)
+    edges, triangle_edges = build_cr_edges(triangles)
+    quotient = d6_sector_edge_quotient(edges, pmesh.node_keys)
+    local_mass = [local_cr_mass_matrix(nodes, tri) for tri in triangles]
+    local_stiffness = [
+        local_cr_stiffness_matrix_from_integrals(nodes, triangles[t], metric_integrals[t])
+        for t in eachindex(triangles)
+    ]
+    mass = Dict{Tuple{Int, Int}, Interval{BigFloat}}()
+    stiffness = Dict{Tuple{Int, Int}, Interval{BigFloat}}()
+
+    for t in eachindex(triangles)
+        dofs = ntuple(a -> quotient[triangle_edges[t][a]], 3)
+        addblock!(mass, dofs, local_mass[t])
+        addblock!(stiffness, dofs, local_stiffness[t])
+    end
+
+    return (;
+        nodes,
+        triangles,
+        edges,
+        triangle_edges,
+        quotient,
+        matrix_size = maximum(quotient),
+        mass,
+        stiffness,
+        local_mass,
+        local_stiffness,
+    )
+end
+
+function assemble_qdelta_cr_matrices(nodes, triangles, metric_integrals; delta = DEFAULT_DELTA, N::Integer = DEFAULT_N)
+    qmesh = qdelta_triangulation(; delta, N)
     edges, triangle_edges = build_cr_edges(qmesh.triangles)
     local_mass = [local_cr_mass_matrix(nodes, tri) for tri in triangles]
     local_stiffness = [
@@ -430,6 +511,7 @@ function assemble_qdelta_cr_matrices(nodes, triangles, metric_integrals)
         source_triangles = qmesh.source_triangles,
         edges,
         triangle_edges,
+        matrix_size = length(edges),
         mass,
         stiffness,
         local_mass,
@@ -477,19 +559,16 @@ function symmetrize_entries(A)
 end
 
 function write_matlab_matrices(assembly; dir = @__DIR__)
-    n = length(assembly.edges)
+    n = hasproperty(assembly, :matrix_size) ? assembly.matrix_size : length(assembly.edges)
     savematrix(joinpath(dir, "stiff_matrix.mat"), symmetrize_entries(assembly.stiffness), n)
     savematrix(joinpath(dir, "mass_matrix.mat"), symmetrize_entries(assembly.mass), n)
 end
 
 """
-Run the current Step 1 prototype.
-
-This constructs the hardcoded P_delta triangulation and computes
-triangle-wise inverse-metric bounds in memory. Nothing is written to disk.
+Assemble the D6-invariant CR eigenvalue problem and write MATLAB input files.
 """
-function main()
-    nodes, triangles = get_pdelta_triangulation()
+function main(; delta = DEFAULT_DELTA, N::Integer = DEFAULT_N)
+    nodes, triangles = get_pdelta_triangulation(; delta, N)
     println("P_delta triangulation: $(size(nodes, 1)) nodes, $(length(triangles)) triangles")
 
     elapsed = @elapsed metric_integrals = metric_integrals_on_pdelta_triangulation(nodes, triangles)
@@ -500,9 +579,9 @@ function main()
     println("max width int_yx <= $(maximum(sup(U.yx) - inf(U.yx) for U in metric_integrals))")
     println("max width int_yy <= $(maximum(sup(U.yy) - inf(U.yy) for U in metric_integrals))")
 
-    assembly = assemble_qdelta_cr_matrices(nodes, triangles, metric_integrals)
-    println("Q_delta triangulation: $(size(assembly.nodes, 1)) nodes, $(length(assembly.triangles)) triangles")
-    println("CR matrices: $(length(assembly.edges)) x $(length(assembly.edges))")
+    assembly = assemble_d6_invariant_cr_matrices(nodes, triangles, metric_integrals; delta, N)
+    println("D6-invariant CR matrices: $(assembly.matrix_size) x $(assembly.matrix_size)")
+    println("sector CR edges before quotient: $(length(assembly.edges))")
     println("mass stored entries: $(length(assembly.mass))")
     println("stiffness stored entries: $(length(assembly.stiffness))")
 

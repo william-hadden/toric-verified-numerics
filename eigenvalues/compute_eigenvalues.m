@@ -34,5 +34,5 @@ elapsed = toc;
 disp('veigs runtime in seconds:')
 disp(elapsed)
 
-disp('Certified FEM eigenvalue intervals:')
+disp('Certified D6-invariant FEM eigenvalue intervals:')
 disp([ind(:), inf(lambda(:)), sup(lambda(:))])
