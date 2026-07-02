@@ -39,8 +39,8 @@ function inverse_metric_bounds_on_lower_square_box_v2(
     xbox::Interval,
     ybox::Interval,
 )
-    xcheb = interval_constant(2) * xbox - interval_constant(1)
-    ycheb = interval_constant(2) * ybox + interval_constant(1)
+    xcheb = exact(2) * xbox - exact(1)
+    ycheb = exact(2) * ybox + exact(1)
     v = oracle.canonical
 
     h11 = local_coeff_sum_centered_enclosure_with_tail(oracle.h11, xcheb, ycheb)
@@ -56,7 +56,7 @@ function inverse_metric_bounds_on_lower_square_box_v2(
     A11 = v22 + lprod * h22
     A12 = -(v12 + lprod * h12)
     A22 = v11 + lprod * h11
-    D = B + v22 * h11 + v11 * h22 - interval_constant(2) * v12 * h12 +
+    D = B + v22 * h11 + v11 * h22 - exact(2) * v12 * h12 +
         lprod * (h11 * h22 - h12^2)
     box_bounds = inverse_metric_box_from_component_enclosures(A11, A12, A22, D)
 

@@ -5,10 +5,15 @@ Logging.disable_logging(Logging.Info)
 setprecision(BigFloat, 100)
 
 include(joinpath(@__DIR__, "inverse_metric_box_bounds_v2.jl"))
+include(joinpath(@__DIR__, "util", "local_polynomials.jl"))
 
 const DEFAULT_DELTA = 1 // 20000
 const DEFAULT_N = 14
 
+"""
+Flips the sign of the xy and yx components of a 2x2 tensor. This is the correct
+transformation if transforming from [0,1]x[-1,0] to [0,1]x[0,1].
+"""
 physical_metric_components(U) = (; xx = U.xx, xy = -U.xy, yx = -U.yx, yy = U.yy)
 
 """
@@ -19,9 +24,10 @@ and (1, -1). The default inset is delta = 1/20000, and the default mesh uses
 N = 14 uniform lattice steps along each edge, giving 196 triangles.
 
 The returned `nodes` is an n x 2 matrix of interval coordinates, and
-`triangles` is a vector of triples of node indices. All geometric coordinates
-are intervals so later mesh-generation and inset operations can preserve
-outward containment without changing the assembly API.
+`triangles` is a vector of positively oriented triples of node indices whose
+second vertex is the right-angle vertex. All geometric coordinates are intervals
+so later mesh-generation and inset operations can preserve outward containment
+without changing the assembly API.
 """
 function pdelta_mesh_data(; delta = DEFAULT_DELTA, N::Integer = DEFAULT_N)
     I(x) = interval(BigFloat(x, RoundDown), BigFloat(x, RoundUp))
@@ -40,7 +46,7 @@ function pdelta_mesh_data(; delta = DEFAULT_DELTA, N::Integer = DEFAULT_N)
     triangles = Tuple{Int, Int, Int}[]
     for i in 0:(N - 1)
         for j in 0:i
-            push!(triangles, (index(i, j), index(i + 1, j + 1), index(i + 1, j)))
+            push!(triangles, (index(i + 1, j + 1), index(i + 1, j), index(i, j)))
         end
         for j in 0:(i - 1)
             push!(triangles, (index(i, j), index(i, j + 1), index(i + 1, j + 1)))
@@ -50,115 +56,17 @@ function pdelta_mesh_data(; delta = DEFAULT_DELTA, N::Integer = DEFAULT_N)
     return (; nodes, triangles, node_keys, h)
 end
 
-function poly_trim_with_tail(A, deg::Integer)
-    T = eltype(A)
-    B = zeros(T, min(size(A, 1), deg + 1), min(size(A, 2), deg + 1))
-    tail = zero(abs(A[1, 1]))
-
-    for j in axes(A, 2), i in axes(A, 1)
-        if i <= size(B, 1) && j <= size(B, 2) && (i - 1) + (j - 1) <= deg
-            B[i, j] += A[i, j]
-        else
-            tail += abs(A[i, j])
-        end
-    end
-
-    B[1, 1] += symmetric_interval(tail)
-    return B
-end
-
-function poly_add(A, B)
-    T = promote_type(eltype(A), eltype(B))
-    C = zeros(T, max(size(A, 1), size(B, 1)), max(size(A, 2), size(B, 2)))
-    C[1:size(A, 1), 1:size(A, 2)] .+= A
-    C[1:size(B, 1), 1:size(B, 2)] .+= B
-    return C
-end
-
-poly_sub(A, B) = poly_add(A, -B)
-poly_scale(A, c) = c .* A
-poly_exact_zero(x) = isequal_interval(x, zero(x))
-
-function poly_mul(A, B)
-    T = promote_type(eltype(A), eltype(B))
-    C = zeros(T, size(A, 1) + size(B, 1) - 1, size(A, 2) + size(B, 2) - 1)
-
-    for j in axes(A, 2), i in axes(A, 1)
-        poly_exact_zero(A[i, j]) && continue
-        for l in axes(B, 2), k in axes(B, 1)
-            poly_exact_zero(B[k, l]) && continue
-            C[i + k - 1, j + l - 1] += A[i, j] * B[k, l]
-        end
-    end
-
-    return C
-end
-
-poly_mul_trunc(A, B, deg::Integer) = poly_trim_with_tail(poly_mul(A, B), deg)
-
-function local_power_with_tail(trunc, xcheb, ycheb, deg::Integer)
-    P = local_power_coeffs_cheb_2d(trunc.coeffs, xcheb, ycheb)
-    P[1, 1] += symmetric_interval(trunc.tail)
-    return poly_trim_with_tail(P, deg)
-end
-
-function local_power_trimmed(coeffs, xcheb, ycheb, deg::Integer)
-    return poly_trim_with_tail(local_power_coeffs_cheb_2d(coeffs, xcheb, ycheb), deg)
-end
-
-function local_metric_component_polynomials(oracle, xcheb, ycheb; deg::Integer = 8)
-    v = oracle.canonical
-
-    h11 = local_power_with_tail(oracle.h11, xcheb, ycheb, deg)
-    h12 = local_power_with_tail(oracle.h12, xcheb, ycheb, deg)
-    h22 = local_power_with_tail(oracle.h22, xcheb, ycheb, deg)
-
-    lprod = local_power_trimmed(v.lprod, xcheb, ycheb, deg)
-    v11 = local_power_trimmed(v.lprod_v11, xcheb, ycheb, deg)
-    v12 = local_power_trimmed(v.lprod_v12, xcheb, ycheb, deg)
-    v22 = local_power_trimmed(v.lprod_v22, xcheb, ycheb, deg)
-    B = local_power_trimmed(v.B, xcheb, ycheb, deg)
-
-    A11 = poly_trim_with_tail(poly_add(v22, poly_mul_trunc(lprod, h22, deg)), deg)
-    A12 = poly_scale(poly_trim_with_tail(poly_add(v12, poly_mul_trunc(lprod, h12, deg)), deg), -interval(BigFloat(1)))
-    A22 = poly_trim_with_tail(poly_add(v11, poly_mul_trunc(lprod, h11, deg)), deg)
-
-    D = poly_add(B, poly_mul_trunc(v22, h11, deg))
-    D = poly_add(D, poly_mul_trunc(v11, h22, deg))
-    D = poly_sub(D, poly_scale(poly_mul_trunc(v12, h12, deg), interval(BigFloat(2))))
-    D = poly_add(D, poly_mul_trunc(lprod, poly_sub(poly_mul_trunc(h11, h22, deg), poly_mul_trunc(h12, h12, deg)), deg))
-    D = poly_trim_with_tail(D, deg)
-
-    return (; A11, A12, A22, D)
-end
-
-poly_abs_bound(A) = sum(abs(A[i, j]) for j in axes(A, 2), i in axes(A, 1))
-
-function reciprocal_polynomial_neumann(D; deg::Integer = 8, terms::Integer = 8)
-    d0 = (inf(D[1, 1]) + sup(D[1, 1])) / 2
-    R = copy(D)
-    R[1, 1] -= interval(d0)
-
-    ratio = sup(poly_abs_bound(R)) / abs(d0)
-    ratio < 1 || error("Neumann series does not contract: ratio = $ratio")
-
-    T = eltype(D)
-    P = zeros(T, 1, 1)
-    Rpow = zeros(T, 1, 1)
-    Rpow[1, 1] = interval(BigFloat(1))
-
-    for k in 0:terms
-        P = poly_add(P, poly_scale(Rpow, interval((-1)^k) / interval(d0)^(k + 1)))
-        Rpow = poly_mul_trunc(Rpow, R, deg)
-    end
-
-    remainder = (ratio^(terms + 1)) / (abs(d0) * (1 - ratio))
-    P[1, 1] += symmetric_interval(interval(BigFloat(remainder)))
-    return poly_trim_with_tail(P, deg)
-end
-
+"""
+Return the monomial moment of degree n on [-1, 1]:
+the integral from -1 to 1 of x^n dx.
+"""
 J_moment(n::Integer) = iseven(n) ? interval(BigFloat(2) / BigFloat(n + 1)) : interval(BigFloat(0))
 
+"""
+Return the `x^p y^q` moment on one half of `[-1,1]^2`. upper == true
+computes on the half `x + y >= 0`. upper == false computes on the half
+`x + y <= 0`.
+"""
 function half_square_moment(p::Integer, q::Integer, upper::Bool)
     if upper
         return (J_moment(p) - interval(BigFloat((-1)^(q + 1))) * J_moment(p + q + 1)) / interval(BigFloat(q + 1))
@@ -167,24 +75,29 @@ function half_square_moment(p::Integer, q::Integer, upper::Bool)
     return interval(BigFloat((-1)^(q + 1))) * (J_moment(p + q + 1) - J_moment(p)) / interval(BigFloat(q + 1))
 end
 
-function triangle_is_upper_half(nodes, tri, xbox, ybox)
-    xc = (inf(xbox) + sup(xbox)) / 2
-    yc = (inf(ybox) + sup(ybox)) / 2
-    rx = (sup(xbox) - inf(xbox)) / 2
-    ry = (sup(ybox) - inf(ybox)) / 2
-    vals = [
-        ((inf(nodes[i, 1]) + sup(nodes[i, 1])) / 2 - xc) / rx +
-        ((inf(nodes[i, 2]) + sup(nodes[i, 2])) / 2 - yc) / ry
-        for i in tri
-    ]
-    return maximum(vals) > -minimum(vals)
+"""
+For this structured triangulation, return whether the right-angle vertex lies
+above the midpoint of the opposite edge.
+"""
+function triangle_is_upper_half(nodes, tri)
+    right_angle_y = nodes[tri[2], 2]
+    opposite_midpoint_y = (nodes[tri[1], 2] + nodes[tri[3], 2]) / interval(BigFloat(2))
+    offset = right_angle_y - opposite_midpoint_y
+
+    inf(offset) > 0 && return true
+    sup(offset) < 0 && return false
+    error("Could not determine which half-square contains the triangle")
 end
 
+"""
+Integrate a local polynomial (in the standard monomial basis, not Chebyshev) 
+over one mesh triangle.
+"""
 function integrate_local_polynomial_on_triangle(P, nodes, tri, xbox, ybox)
     rx = interval((sup(xbox) - inf(xbox)) / 2)
     ry = interval((sup(ybox) - inf(ybox)) / 2)
-    upper = triangle_is_upper_half(nodes, tri, xbox, ybox)
-    total = zero(P[1, 1])
+    upper = triangle_is_upper_half(nodes, tri)
+    total = interval(BigFloat(0))
 
     for j in axes(P, 2), i in axes(P, 1)
         total += P[i, j] * half_square_moment(i - 1, j - 1, upper)
@@ -193,13 +106,16 @@ function integrate_local_polynomial_on_triangle(P, nodes, tri, xbox, ybox)
     return rx * ry * total
 end
 
+"""
+Compute interval integrals of the inverse metric components over one triangle.
+"""
 function metric_integral_for_single_triangle(oracle, nodes, tri; deg::Integer = 8, terms::Integer = 8)
     xs = nodes[collect(tri), 1]
     ys = nodes[collect(tri), 2]
     xbox = hull(hull(xs[1], xs[2]), xs[3])
     ybox = hull(hull(ys[1], ys[2]), ys[3])
-    xcheb = interval_constant(2) * xbox - interval_constant(1)
-    ycheb = interval_constant(2) * ybox + interval_constant(1)
+    xcheb = exact(2) * xbox - exact(1)
+    ycheb = exact(2) * ybox + exact(1)
 
     C = local_metric_component_polynomials(oracle, xcheb, ycheb; deg)
     invD = reciprocal_polynomial_neumann(C.D; deg, terms)
@@ -212,11 +128,17 @@ function metric_integral_for_single_triangle(oracle, nodes, tri; deg::Integer = 
     ))
 end
 
+"""
+Compute inverse-metric component integrals for every triangle in a P_delta mesh.
+"""
 function metric_integrals_on_pdelta_triangulation(nodes, triangles; deg::Integer = 8, terms::Integer = 8)
     oracle = InverseMetricBoxOracleV2()
     return [metric_integral_for_single_triangle(oracle, nodes, tri; deg, terms) for tri in triangles]
 end
 
+"""
+Return the signed double area of a triangle.
+"""
 function triangle_double_area(nodes, tri)
     x1, y1 = nodes[tri[1], 1], nodes[tri[1], 2]
     x2, y2 = nodes[tri[2], 1], nodes[tri[2], 2]
@@ -224,8 +146,9 @@ function triangle_double_area(nodes, tri)
     return (x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1)
 end
 
-triangle_area(nodes, tri) = triangle_double_area(nodes, tri) / interval(BigFloat(2))
-
+"""
+Return the three constant Crouzeix-Raviart basis gradients on a triangle.
+"""
 function cr_gradients(nodes, tri)
     x1, y1 = nodes[tri[1], 1], nodes[tri[1], 2]
     x2, y2 = nodes[tri[2], 1], nodes[tri[2], 2]
@@ -239,8 +162,12 @@ function cr_gradients(nodes, tri)
     ] / detJ
 end
 
+"""
+Return the local diagonal CR mass matrix on a triangle. It is a diagonal
+matrix.
+"""
 function local_cr_mass_matrix(nodes, tri)
-    area = triangle_area(nodes, tri)
+    area = triangle_double_area(nodes, tri) / interval(BigFloat(2))
     M = fill(zero(area), 3, 3)
     for a in 1:3
         M[a, a] = area / interval(BigFloat(3))
@@ -248,6 +175,9 @@ function local_cr_mass_matrix(nodes, tri)
     return M
 end
 
+"""
+Return the local CR stiffness matrix from preintegrated metric components.
+"""
 function local_cr_stiffness_matrix_from_integrals(nodes, tri, U)
     G = cr_gradients(nodes, tri)
     K = fill(zero(U.xx), 3, 3)
@@ -263,9 +193,19 @@ function local_cr_stiffness_matrix_from_integrals(nodes, tri, U)
     return K
 end
 
+"""
+Return the three opposite edges used as local CR degrees of freedom.
+"""
 local_cr_edges(tri) = ((tri[2], tri[3]), (tri[3], tri[1]), (tri[1], tri[2]))
+
+"""
+Return a canonical ordered key for an undirected edge.
+"""
 edge_key(i, j) = i < j ? (i, j) : (j, i)
 
+"""
+Build global CR edge degrees of freedom for a triangle list.
+"""
 function build_cr_edges(triangles)
     edge_ids = Dict{Tuple{Int, Int}, Int}()
     edges = Tuple{Int, Int}[]
@@ -288,6 +228,10 @@ function build_cr_edges(triangles)
     return edges, triangle_edges
 end
 
+"""
+Add a dense local matrix block B into a sparse dictionary matrix A.
+It will be added at keys dof.
+"""
 function addblock!(A, dofs, B)
     for a in 1:3, b in 1:3
         iszero(B[a, b]) && continue
@@ -296,9 +240,31 @@ function addblock!(A, dofs, B)
     end
 end
 
+"""
+Rotate an integer lattice key by `k` units of the D6 rotation.
+This rotates fundamental domains within the standard hexagon with
+vertices (-1,1),(-1,0),(0,-1),(1,-1),(1,0),(0,1). Here, (a,b) are
+integers identifying lattice points. (a,b) encodes the lattice point
+(a*h,b*h), see the construction in pdelta_mesh_data.
+"""
 rotkey((a, b), k) = k == 0 ? (a, b) : rotkey((-b, a + b), k - 1)
+
+"""
+Reflect a sector edge key across the lower-square diagonal.
+"""
 sector_reflect_key((a, b)) = (a, -a - b)
 
+"""
+Return exact doubled midpoint lattice coordinates for CR edge degrees of freedom.
+
+`edges` is a list of vertex-index pairs `(i, j)`. `vertex_keys[v]` is the
+integer lattice coordinate `(a, b)` of vertex `v`, representing the physical
+point `(a*h, b*h)`. For each edge, this returns `vertex_keys[i] + vertex_keys[j]`,
+which represents twice the edge midpoint and avoids half-integer coordinates.
+
+Example: if an edge joins vertices with keys `(3, -1)` and `(4, -2)`, the
+returned key is `(7, -3)`, representing midpoint `(7h/2, -3h/2)`.
+"""
 function edge_key_sums(edges, vertex_keys)
     return [
         (vertex_keys[i][1] + vertex_keys[j][1], vertex_keys[i][2] + vertex_keys[j][2])
@@ -306,6 +272,18 @@ function edge_key_sums(edges, vertex_keys)
     ]
 end
 
+"""
+Return the quotient degree-of-freedom index for each original index.
+
+The original indices are `1:n`. Each pair `(i, j)` in `pairs` declares that
+indices `i` and `j` represent the same quotient degree of freedom. The returned
+vector `q` has length `n`, and `q[i]` is the new consecutive quotient index for
+old index `i`.
+
+Example: if `n = 9` and `pairs = [(2, 5), (5, 9), (3, 7)]`, then indices
+`2, 5, 9` are identified, and indices `3, 7` are identified. A possible return
+value is `[1, 2, 3, 4, 2, 5, 3, 6, 2]`.
+"""
 function quotient_map(n::Integer, pairs)
     parent = collect(1:n)
 
@@ -326,6 +304,9 @@ function quotient_map(n::Integer, pairs)
     return [get!(root_ids, find_root(i), length(root_ids) + 1) for i in 1:n]
 end
 
+"""
+Compute the D6-invariant quotient map for sector CR edge degrees of freedom.
+"""
 function d6_sector_edge_quotient(edges, vertex_keys)
     sums = edge_key_sums(edges, vertex_keys)
     edge_id = Dict(sums[i] => i for i in eachindex(sums))
@@ -344,6 +325,10 @@ function d6_sector_edge_quotient(edges, vertex_keys)
     return quotient_map(length(edges), pairs)
 end
 
+"""
+Assemble D6-invariant CR mass and stiffness matrices on the fundamental
+domain triangle P_delta.
+"""
 function assemble_d6_invariant_cr_matrices(nodes, triangles, metric_integrals; delta = DEFAULT_DELTA, N::Integer = DEFAULT_N)
     pmesh = pdelta_mesh_data(; delta, N)
     edges, triangle_edges = build_cr_edges(triangles)
@@ -365,9 +350,9 @@ function assemble_d6_invariant_cr_matrices(nodes, triangles, metric_integrals; d
     return (; matrix_size = maximum(quotient), mass, stiffness)
 end
 
-float_down(x) = Float64(x, RoundDown)
-float_up(x) = Float64(x, RoundUp)
-
+"""
+Write MATLAB v4 variables from name-value entries.
+"""
 function mat4write(path, entries)
     open(path, "w") do io
         for (name, value) in entries
@@ -380,17 +365,23 @@ function mat4write(path, entries)
     end
 end
 
+"""
+Save a sparse interval matrix as MATLAB v4 endpoint arrays.
+"""
 function savematrix(path, A, n)
     ij = sort!(collect(keys(A)))
     mat4write(path, [
         "n" => n,
         "i" => first.(ij),
         "j" => last.(ij),
-        "lo" => [float_down(inf(A[key])) for key in ij],
-        "hi" => [float_up(sup(A[key])) for key in ij],
+        "lo" => [Float64(inf(A[key]), RoundDown) for key in ij],
+        "hi" => [Float64(sup(A[key]), RoundUp) for key in ij],
     ])
 end
 
+"""
+Widen paired entries so a dictionary matrix is exactly symmetric.
+"""
 function symmetrize_entries(A)
     S = copy(A)
     for (i, j) in collect(keys(A))
@@ -402,6 +393,9 @@ function symmetrize_entries(A)
     return S
 end
 
+"""
+Write stiffness and mass matrices for MATLAB/INTLAB.
+"""
 function write_matlab_matrices(assembly; dir = @__DIR__)
     n = assembly.matrix_size
     savematrix(joinpath(dir, "stiff_matrix.mat"), symmetrize_entries(assembly.stiffness), n)
