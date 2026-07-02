@@ -1,3 +1,4 @@
+using JSON
 using LinearAlgebra
 using Printf
 
@@ -5,48 +6,20 @@ include(joinpath(@__DIR__, "..", "assemble_matrices.jl"))
 
 midpoint(x) = Float64((inf(x) + sup(x)) / 2)
 
-function read_mat4_variables(path)
-    vars = Dict{String, Matrix{Float64}}()
-
-    open(path, "r") do io
-        while !eof(io)
-            read(io, Int32)
-            rows = read(io, Int32)
-            cols = read(io, Int32)
-            read(io, Int32)
-            name_len = read(io, Int32)
-            name = String(read(io, name_len - 1))
-            read(io, UInt8)
-            data = Vector{Float64}(undef, rows * cols)
-            read!(io, data)
-            vars[name] = reshape(data, rows, cols)
-        end
-    end
-
-    return vars
-end
-
-function midpoint_entries(path)
-    vars = read_mat4_variables(path)
-    return (;
-        n = round(Int, vars["n"][1]),
-        i = round.(Int, vec(vars["i"])),
-        j = round.(Int, vec(vars["j"])),
-        values = (vec(vars["lo"]) .+ vec(vars["hi"])) ./ 2,
-    )
-end
-
 function midpoint_eigenpairs(k = 8)
-    Kdata = midpoint_entries(joinpath(@__DIR__, "..", "stiff_matrix.mat"))
-    Mdata = midpoint_entries(joinpath(@__DIR__, "..", "mass_matrix.mat"))
-    K = zeros(Float64, Kdata.n, Kdata.n)
-    masses = zeros(Float64, Mdata.n)
+    nodes, triangles = get_pdelta_triangulation()
+    println("assembling full midpoint eigenproblem for visualisation")
+    metric_integrals = metric_integrals_on_pdelta_triangulation(nodes, triangles)
+    assembly = assemble_qdelta_cr_matrices(nodes, triangles, metric_integrals)
 
-    for a in eachindex(Kdata.values)
-        K[Kdata.i[a], Kdata.j[a]] = Kdata.values[a]
+    K = zeros(Float64, assembly.matrix_size, assembly.matrix_size)
+    masses = zeros(Float64, assembly.matrix_size)
+
+    for ((i, j), v) in assembly.stiffness
+        K[i, j] = midpoint(v)
     end
-    for a in eachindex(Mdata.values)
-        masses[Mdata.i[a]] = Mdata.values[a]
+    for ((i, _), v) in assembly.mass
+        masses[i] = midpoint(v)
     end
 
     invsqrt = 1 ./ sqrt.(masses)
@@ -84,7 +57,6 @@ function weighted_q(masses, A)
     return Q[:, 1:size(A, 2)]
 end
 
-rotkey((a, b), k) = k == 0 ? (a, b) : rotkey((-b, a + b), k - 1)
 reflkey((a, b)) = (b, a)
 
 function symmetry_permutations(keysum)
@@ -110,7 +82,25 @@ function color_for(t)
     return @sprintf("#%02x%02x%02x", r, g, b)
 end
 
-function write_svg(path, xy, values, lambdas)
+function render_png(path, width, height, items)
+    spec_path = tempname() * ".json"
+    open(spec_path, "w") do io
+        JSON.print(io, Dict(
+            "output" => path,
+            "width" => width,
+            "height" => height,
+            "scale" => 3,
+            "items" => items,
+        ))
+    end
+    try
+        run(`python3 $(joinpath(@__DIR__, "render_png.py")) $spec_path`)
+    finally
+        rm(spec_path; force = true)
+    end
+end
+
+function write_png(path, xy, values, lambdas)
     width = 1050
     height = 700
     panel_w = width / 3
@@ -119,32 +109,41 @@ function write_svg(path, xy, values, lambdas)
     xmin, xmax = extrema(xy[:, 1])
     ymin, ymax = extrema(xy[:, 2])
     span = max(xmax - xmin, ymax - ymin)
+    items = Any[]
 
-    open(path, "w") do io
-        println(io, """<svg xmlns="http://www.w3.org/2000/svg" width="$width" height="$height" viewBox="0 0 $width $height">""")
-        println(io, """<rect width="100%" height="100%" fill="white"/>""")
+    for j in 1:min(size(values, 2), 6)
+        col = (j - 1) % 3
+        row = (j - 1) ÷ 3
+        ox = col * panel_w
+        oy = row * panel_h
+        scale = (min(panel_w, panel_h) - 2margin) / span
+        vals = values[:, j]
+        vmax = maximum(abs.(vals))
 
-        for j in 1:min(size(values, 2), 6)
-            col = (j - 1) % 3
-            row = (j - 1) ÷ 3
-            ox = col * panel_w
-            oy = row * panel_h
-            scale = (min(panel_w, panel_h) - 2margin) / span
-            vals = values[:, j]
-            vmax = maximum(abs.(vals))
+        push!(items, Dict(
+            "type" => "text",
+            "position" => [ox + 18, oy + 12],
+            "text" => @sprintf("eig %d, lambda %.6g", j, lambdas[j]),
+            "size" => 17,
+            "fill" => "#111111",
+        ))
 
-            println(io, @sprintf("""<text x="%.3f" y="%.3f" font-family="Helvetica, Arial, sans-serif" font-size="17" fill="#111">eig %d, lambda %.6g</text>""", ox + 18, oy + 25, j, lambdas[j]))
-
-            for i in axes(xy, 1)
-                x = ox + panel_w / 2 + scale * xy[i, 1]
-                y = oy + panel_h / 2 - scale * xy[i, 2]
-                fill = color_for(vals[i] / vmax)
-                println(io, @sprintf("""<circle cx="%.4f" cy="%.4f" r="2.7" fill="%s" stroke="#222" stroke-width="0.2"/>""", x, y, fill))
-            end
+        for i in axes(xy, 1)
+            x = ox + panel_w / 2 + scale * xy[i, 1]
+            y = oy + panel_h / 2 - scale * xy[i, 2]
+            fill = color_for(vals[i] / vmax)
+            push!(items, Dict(
+                "type" => "circle",
+                "center" => [x, y],
+                "radius" => 2.7,
+                "fill" => fill,
+                "outline" => "#222222",
+                "width" => 0.2,
+            ))
         end
-
-        println(io, "</svg>")
     end
+
+    render_png(path, width, height, items)
 end
 
 function main()
@@ -187,16 +186,16 @@ function main()
         @printf("eig %d: rotation %.3e, reflection %.3e\n", j, rot_res, refl_res)
     end
 
-    svg_path = joinpath(@__DIR__, "eigenfunctions_midpoint_first6.svg")
+    png_path = joinpath(@__DIR__, "eigenfunctions_midpoint_first6.png")
     values = copy(Vn[:, 1:6])
     for j in axes(values, 2)
         if sum(data.masses .* values[:, j]) < 0
             values[:, j] .*= -1
         end
     end
-    write_svg(svg_path, data.xy, values, lambdas)
+    write_png(png_path, data.xy, values, lambdas)
     println()
-    println("wrote ", svg_path)
+    println("wrote ", png_path)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
