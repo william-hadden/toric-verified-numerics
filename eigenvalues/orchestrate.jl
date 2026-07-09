@@ -41,39 +41,42 @@ function run_matlab_verified_eigenvalue()
     run(setenv(`matlab -nodesktop -nosplash -nodisplay -batch $("run('$script')")`, env))
 end
 
-function read_lambda_1_delta_lower_bound()
+function read_lambda_delta()
     vars = read_mat4_variables(VERIFIED_EIGENVALUE_PATH)
     return vars["lambda_lb"][1]
 end
 
-function theorem_rhs_upper_bound(bounds)
-    Kminus = BoundIO.parse_bound_value(bounds["curvature_bounds"]["ricci_lower_bound"])
+function compute_lambda1_lower_bound(lambda_delta, bounds)
+    mu = BoundIO.parse_bound_value(bounds["curvature_bounds"]["ricci_lower_bound"])
     delta = rational_interval(numerator(DEFAULT_DELTA), denominator(DEFAULT_DELTA))
-    lambda = interval(BigFloat(5))
+    one = interval(BigFloat(1))
+    two = interval(BigFloat(2))
+    three = interval(BigFloat(3))
+    seven = interval(BigFloat(7))
 
-    inf(Kminus) > sup(rational_interval(1, 3) - rational_interval(1, 10)) || error("Ricci lower bound assumption failed")
+    inf(lambda_delta) > 0 || error("Inset eigenvalue lower bound must be positive")
+    inf(mu) > 0 || error("Ricci lower bound must be positive")
     inf(delta) > 0 || error("Delta positivity assumption failed")
-    sup(delta) < inf(rational_interval(1, 10000)) || error("Delta smallness assumption failed")
+    inf(three - seven * delta) > 0 || error("Inset-comparison denominator failed")
 
-    rhs = lambda * (
-        1 +
-        sqrt(rational_interval(175, 48)) *
-        (lambda / (interval(BigFloat(2)) * Kminus) + interval(BigFloat(2))) *
-        sqrt(delta)
-    )
+    sqrt_7delta = sqrt(seven * delta)
+    sqrt_7delta_over_3 = sqrt(seven * delta / three)
+    c = one - sqrt_7delta_over_3 - sqrt_7delta / (two * interval(BigFloat, pi) * (three - seven * delta))
+    b = sqrt_7delta_over_3 * three / (two * mu)
 
-    return sup(rhs)
+    inf(c) > 0 || error("Inset-comparison denominator constant failed")
+    return lambda_delta * c / (one + lambda_delta * b)
 end
 
-function update_verified_bounds(lambda_1_delta_lower_bound::Float64)
+function update_verified_bounds(lambda_delta::Float64)
     bounds = JSON.parsefile(VERIFIED_BOUNDS_PATH)
-    lhs = interval(BigFloat(lambda_1_delta_lower_bound))
-    rhs_upper = theorem_rhs_upper_bound(bounds)
+    # lambda_delta is the left endpoint of the INTLAB interval, which is the
+    # conservative lower bound for the inset eigenvalue.
+    lambda_delta = interval(BigFloat(lambda_delta))
+    lambda1_lower_bound = compute_lambda1_lower_bound(lambda_delta, bounds)
 
-    inf(lhs) > rhs_upper || error("Theorem check failed")
-
-    bounds["lambda_1_delta_lower_bound"] = BoundIO.serialize_bound_value(lhs)
-    bounds["lambda_1_lower_bound"] = "5"
+    bounds["lambda_1_delta_lower_bound"] = BoundIO.serialize_bound_value(lambda_delta)
+    bounds["lambda_1_lower_bound"] = BoundIO.serialize_bound_value(BigFloat(inf(lambda1_lower_bound)))
 
     open(VERIFIED_BOUNDS_PATH, "w") do io
         JSON.print(io, bounds, 4)
@@ -87,7 +90,7 @@ function run_orchestration()
     assembly = assemble_d6_invariant_cr_matrices(pmesh.nodes, pmesh.triangles, metric_integrals)
     write_matlab_matrices(assembly)
     run_matlab_verified_eigenvalue()
-    update_verified_bounds(read_lambda_1_delta_lower_bound())
+    update_verified_bounds(read_lambda_delta())
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
