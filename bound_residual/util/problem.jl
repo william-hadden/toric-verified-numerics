@@ -433,22 +433,27 @@ end
 Apply the `D^3u` estimate from the integrated Bochner/commutator proposition.
 
 For `u = MA`, the proposition gives
-`||nabla^3 u||_L2^2 <= ||nabla Delta u||_L2^2
+`||nabla^3 u||_L2^2 <= 2 ||nabla Delta u||_L2^2
     + Cl{D^3u-estimate-second-summand} * ||u||_L2_2^2`,
 where
-`Cl{D^3u-estimate-second-summand} = 2n K2 + n K3`.
+`Cl{D^3u-estimate-second-summand} = 2 K1^2 + 3n K2 + n K3`.
 
-Here `n = 2`, `K2 = ||Riem||_C0`, and `K3 = ||nabla Riem||_C0`.
-The input `nabla_laplace_MA_L2_squared_bound` is the first summand
+Here `n = 4`, `K1 = ||Ric||_C0`, `K2 = ||Riem||_C0`, and
+`K3 = ||nabla Riem||_C0`.
+The input `nabla_laplace_MA_L2_squared_bound` is
 `||nabla Delta u||_L2^2`. The lower Sobolev norm uses the project
 convention `||u||_L2_2 = ||u||_L2 + ||nabla u||_L2 + ||nabla^2 u||_L2`.
 """
 function nabla_3_from_laplace_bound(nabla_laplace_MA_L2_squared_bound::Number)
     curvature_bounds = read_bound("curvature_bounds")
+    K1 = curvature_bounds["ricci_C0"]
     K2 = curvature_bounds["riemann_C0"]
     K3 = curvature_bounds["nabla_riemann_C0"]
-    n = interval(BigFloat(2))
-    Cl_D3u_estimate_second_summand = interval(BigFloat(2)) * n * K2 + n * K3
+    n = interval(BigFloat(4))
+    Cl_D3u_estimate_second_summand =
+        interval(BigFloat(2)) * K1^2 +
+        interval(BigFloat(3)) * n * K2 +
+        n * K3
 
     ma_sobolev_bounds = read_bound("ma_sobolev_bounds")
     MA_L2_bound = ma_sobolev_bounds["L2"]
@@ -458,7 +463,7 @@ function nabla_3_from_laplace_bound(nabla_laplace_MA_L2_squared_bound::Number)
         ma_sobolev_bounds["nabla2_L2"]
 
     return sqrt(
-        nabla_laplace_MA_L2_squared_bound +
+        interval(BigFloat(2)) * nabla_laplace_MA_L2_squared_bound +
         Cl_D3u_estimate_second_summand * MA_L2_2_bound^2
     )
 end
