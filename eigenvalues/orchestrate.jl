@@ -1,96 +1,171 @@
 using IntervalArithmetic
 using JSON
+using Printf
 
 include(joinpath(@__DIR__, "assemble_matrices.jl"))
-module BoundIO
-using IntervalArithmetic
-include(joinpath(@__DIR__, "..", "bound_residual", "util", "io.jl"))
-end
 
-const VERIFIED_EIGENVALUE_PATH = joinpath(@__DIR__, "verified_eigenvalue.mat")
-const VERIFIED_BOUNDS_PATH = normpath(joinpath(@__DIR__, "..", "data", "verified_bounds.json"))
-const MATLAB_OPENBLAS_PATH = "/Applications/MATLAB_R2026a.app/bin/maca64/libmwopenblas.dylib"
-
+"""Read all numeric variables from a MATLAB version-4 binary file."""
 function read_mat4_variables(path)
-    vars = Dict{String, Matrix{Float64}}()
-
+    variables = Dict{String,Matrix{Float64}}()
     open(path, "r") do io
         while !eof(io)
             read(io, Int32)
             rows = read(io, Int32)
-            cols = read(io, Int32)
+            columns = read(io, Int32)
             read(io, Int32)
-            name_len = read(io, Int32)
-            name = String(read(io, name_len - 1))
+            name_length = read(io, Int32)
+            name = String(read(io, name_length - 1))
             read(io, UInt8)
-            data = Vector{Float64}(undef, rows * cols)
+            data = Vector{Float64}(undef, rows * columns)
             read!(io, data)
-            vars[name] = reshape(data, rows, cols)
+            variables[name] = reshape(data, rows, columns)
         end
     end
-
-    return vars
+    return variables
 end
 
-rational_interval(p, q) = interval(BigFloat(p)) / interval(BigFloat(q))
-
-function run_matlab_verified_eigenvalue()
-    env = copy(ENV)
-    get!(env, "BLAS_VERSION", MATLAB_OPENBLAS_PATH)
-    script = joinpath(@__DIR__, "compute_verified_eigenvalue.m")
-    run(setenv(`matlab -nodesktop -nosplash -nodisplay -batch $("run('$script')")`, env))
+"""Run the fixed MATLAB/INTLAB verifier in the eigenvalue directory."""
+function run_matlab_verifier()
+    script = replace(joinpath(@__DIR__, "verify_eigenvalue.m"), "'" => "''")
+    run(`matlab -nodesktop -nosplash -nodisplay -batch $("run('$script')")`)
 end
 
-function read_lambda_delta()
-    vars = read_mat4_variables(VERIFIED_EIGENVALUE_PATH)
-    return vars["lambda_lb"][1]
+"""Validate and return the certified FEM eigenvalue endpoints from MATLAB."""
+function verified_fem_endpoints(path)
+    variables = read_mat4_variables(path)
+    required = ("lambda_fem_lb", "lambda_fem_ub", "lambda_fem_ind")
+    all(name -> haskey(variables, name), required) ||
+        error("The MATLAB result is missing a verified eigenvalue variable")
+    all(name -> size(variables[name]) == (1, 1), required) ||
+        error("The verified eigenvalue variables must be scalars")
+    lower = variables["lambda_fem_lb"][1]
+    upper = variables["lambda_fem_ub"][1]
+    index = variables["lambda_fem_ind"][1]
+    all(isfinite, (lower, upper, index)) || error("The verified eigenvalue data are not finite")
+    index == 2 || error("INTLAB did not certify generalized eigenvalue 2")
+    lower <= upper || error("The verified eigenvalue endpoints are reversed")
+    return lower, upper
 end
 
-function compute_lambda1_lower_bound(lambda_delta, bounds)
-    mu = BoundIO.parse_bound_value(bounds["curvature_bounds"]["ricci_lower_bound"])
-    delta = rational_interval(numerator(DEFAULT_DELTA), denominator(DEFAULT_DELTA))
-    one = interval(BigFloat(1))
-    two = interval(BigFloat(2))
-    three = interval(BigFloat(3))
-    seven = interval(BigFloat(7))
+"""Embed an exact rational number in an outward-rounded BigFloat interval."""
+rational_interval(value::Rational) =
+    interval(BigFloat(numerator(value))) / interval(BigFloat(denominator(value)))
 
-    inf(lambda_delta) > 0 || error("Inset eigenvalue lower bound must be positive")
-    inf(mu) > 0 || error("Ricci lower bound must be positive")
-    inf(delta) > 0 || error("Delta positivity assumption failed")
-    inf(three - seven * delta) > 0 || error("Inset-comparison denominator failed")
-
-    sqrt_7delta = sqrt(seven * delta)
-    sqrt_7delta_over_3 = sqrt(seven * delta / three)
-    c = one - sqrt_7delta_over_3 - sqrt_7delta / (two * interval(BigFloat, pi) * (three - seven * delta))
-    b = sqrt_7delta_over_3 * three / (two * mu)
-
-    inf(c) > 0 || error("Inset-comparison denominator constant failed")
-    return lambda_delta * c / (one + lambda_delta * b)
+"""Apply the inset-to-compact comparison to a smooth inset lower bound."""
+function compact_lower_bound(lambda_inset_lower, delta, ricci_lower_bound)
+    lambda = interval(BigFloat(lambda_inset_lower))
+    delta_interval = rational_interval(delta)
+    mu = parse_bound_value(ricci_lower_bound)
+    one, two = interval(BigFloat(1)), interval(BigFloat(2))
+    three, seven = interval(BigFloat(3)), interval(BigFloat(7))
+    inf(mu) > 0 || error("The Ricci lower bound must be positive")
+    inf(delta_interval) > 0 || error("The inset parameter must be positive")
+    inf(three - seven * delta_interval) > 0 ||
+        error("The inset parameter must be smaller than 3/7")
+    square_root = sqrt(seven * delta_interval)
+    boundary_fraction = sqrt(seven * delta_interval / three)
+    c = one - boundary_fraction -
+        square_root / (two * interval(BigFloat, pi) * (three - seven * delta_interval))
+    b = boundary_fraction * three / (two * mu)
+    inf(c) > 0 || error("The compact-comparison numerator is not positive")
+    denominator = one + lambda * b
+    inf(denominator) > 0 || error("The compact-comparison denominator is not positive")
+    return inf(lambda * c / denominator)
 end
 
-function update_verified_bounds(lambda_delta::Float64)
-    bounds = JSON.parsefile(VERIFIED_BOUNDS_PATH)
-    # lambda_delta is the left endpoint of the INTLAB interval, which is the
-    # conservative lower bound for the inset eigenvalue.
-    lambda_delta = interval(BigFloat(lambda_delta))
-    lambda1_lower_bound = compute_lambda1_lower_bound(lambda_delta, bounds)
+"""Serialize a certified lower bound as a decimal which rounds downward."""
+function directed_lower_decimal(value, digits)
+    target = BigFloat(value)
+    isfinite(target) || error("Cannot serialize a non-finite lower bound")
+    candidate = prevfloat(target)
+    while true
+        text = @sprintf("%.*f", digits, candidate)
+        parsed_upper = setrounding(BigFloat, RoundUp) do
+            parse(BigFloat, text)
+        end
+        parsed_upper <= target && return text
+        candidate = prevfloat(candidate)
+    end
+end
 
-    bounds["lambda_1_delta_lower_bound"] = BoundIO.serialize_bound_value(lambda_delta)
-    bounds["lambda_1_lower_bound"] = BoundIO.serialize_bound_value(BigFloat(inf(lambda1_lower_bound)))
-
-    open(VERIFIED_BOUNDS_PATH, "w") do io
+"""Replace only the two canonical eigenvalue bounds in the verified JSON data."""
+function write_eigenvalue_bounds(path, bounds, inset_lower, compact_lower, decimal_digits)
+    bounds["lambda_1_delta_lower_bound"] =
+        directed_lower_decimal(inset_lower, decimal_digits)
+    bounds["lambda_1_lower_bound"] =
+        directed_lower_decimal(compact_lower, decimal_digits)
+    open(path, "w") do io
         JSON.print(io, bounds, 4)
         println(io)
     end
 end
 
+"""Run the fixed rigorous FEM, Liu, and compact-manifold comparison pipeline."""
 function run_orchestration()
-    pmesh = pdelta_mesh_data()
-    metric_integrals = metric_integrals_on_pdelta_triangulation(pmesh.nodes, pmesh.triangles)
-    assembly = assemble_d6_invariant_cr_matrices(pmesh.nodes, pmesh.triangles, metric_integrals)
-    write_matlab_matrices(assembly)
-    run_matlab_verified_eigenvalue()
-    update_verified_bounds(read_lambda_delta())
+    setprecision(BigFloat, 256) do
+        delta = 1 // 5000
+        base_resolution = 20
+        boundary_refinements = 3
+        boundary_layers = 1
+        corner_refinements = 2
+        corner_layers = 1
+        metric_coefficient_degree = 30
+        polynomial_degree = 8
+        neumann_terms = 8
+        bisection_steps = 70
+        quality_target = 7 // 50
+        progress_interval = 100
+        decimal_digits = 77
+
+        mesh = sector_mesh(
+            delta,
+            base_resolution,
+            boundary_refinements,
+            boundary_layers,
+            corner_refinements,
+            corner_layers,
+        )
+        oracle = InverseMetricOracle(metric_coefficient_degree)
+        certificates = certify_elements(
+            oracle,
+            mesh,
+            polynomial_degree,
+            neumann_terms,
+            bisection_steps,
+            quality_target,
+            progress_interval,
+        )
+        assembly = assemble_matrices(mesh, certificates)
+        write_matlab_matrices(assembly, @__DIR__)
+
+        run_matlab_verifier()
+        result_path = joinpath(@__DIR__, "verified_eigenvalue.mat")
+        lambda_fem_lower, lambda_fem_upper = verified_fem_endpoints(result_path)
+        lambda_inset_lower = liu_lower_bound(lambda_fem_lower, assembly.liu_constant)
+
+        bounds_path = normpath(joinpath(@__DIR__, "..", "data", "verified_bounds.json"))
+        bounds = JSON.parsefile(bounds_path)
+        lambda_compact_lower = compact_lower_bound(
+            lambda_inset_lower,
+            delta,
+            bounds["curvature_bounds"]["ricci_lower_bound"],
+        )
+        write_eigenvalue_bounds(
+            bounds_path,
+            bounds,
+            lambda_inset_lower,
+            lambda_compact_lower,
+            decimal_digits,
+        )
+        maximum_cover_depth = maximum(
+            certificate.forced_depth for certificate in certificates
+        )
+        println("FEM eigenvalue enclosure: [$lambda_fem_lower, $lambda_fem_upper]")
+        println("Liu comparison constant: $(assembly.liu_constant)")
+        println("maximum forced metric-cover depth: $maximum_cover_depth")
+        println("smooth inset lower bound: $lambda_inset_lower")
+        println("compact-manifold lower bound: $lambda_compact_lower")
+    end
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

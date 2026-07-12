@@ -4,11 +4,16 @@ using Printf
 
 include(joinpath(@__DIR__, "..", "assemble_matrices.jl"))
 
+"""Return the floating-point midpoint of an interval coordinate."""
 midpoint(x) = Float64((inf(x) + sup(x)) / 2)
+
+"""Return one mesh node as a pair of floating-point midpoints."""
 node_point(nodes, i) = (midpoint(nodes[i, 1]), midpoint(nodes[i, 2]))
 
+"""Rotate a lattice coordinate by `k` sixth-turns."""
 rotate60((x, y), k) = k == 0 ? (x, y) : rotate60((-y, x + y), k - 1)
 
+"""Collect plot coordinates for the requested rotational sector copies."""
 function triangle_points(nodes, triangles; rotations = 0:0)
     out = []
     for k in rotations, tri in triangles
@@ -17,12 +22,14 @@ function triangle_points(nodes, triangles; rotations = 0:0)
     return out
 end
 
+"""Return the Cartesian extent of a collection of plotted triangles."""
 function plot_box(tris)
     xs = [p[1] for tri in tris for p in tri.points]
     ys = [p[2] for tri in tris for p in tri.points]
     return minimum(xs), maximum(xs), minimum(ys), maximum(ys)
 end
 
+"""Construct an aspect-preserving map from mesh to screen coordinates."""
 function screen_map(tris, width, height, margin)
     xmin, xmax, ymin, ymax = plot_box(tris)
     scale = min((width - 2margin) / (xmax - xmin), (height - 2margin) / (ymax - ymin))
@@ -38,6 +45,7 @@ function screen_map(tris, width, height, margin)
     end
 end
 
+"""Render one JSON drawing specification through the local PNG helper."""
 function render_png(path, width, height, items)
     spec_path = tempname() * ".json"
     open(spec_path, "w") do io
@@ -56,6 +64,7 @@ function render_png(path, width, height, items)
     end
 end
 
+"""Write one triangulation plot to a PNG file."""
 function write_png(path, tris; width = 900, height = 760, title = "")
     project = screen_map(tris, width, height, 40)
     colors = ["#dceeff", "#ffe7c7", "#dff3dc", "#f4d9ff", "#ffe0e5", "#d8f0ef"]
@@ -89,6 +98,7 @@ function write_png(path, tris; width = 900, height = 760, title = "")
     render_png(path, width, height, items)
 end
 
+"""Write both the fundamental-sector and full-hexagon triangulation plots."""
 function write_triangulation_plots(nodes, triangles; outdir = @__DIR__)
     p_tris = triangle_points(nodes, triangles)
     q_tris = triangle_points(nodes, triangles; rotations = 0:5)
@@ -102,9 +112,10 @@ function write_triangulation_plots(nodes, triangles; outdir = @__DIR__)
     return (; p_path, q_path)
 end
 
+"""Render the fixed production triangulation."""
 function main()
-    pmesh = pdelta_mesh_data()
-    paths = write_triangulation_plots(pmesh.nodes, pmesh.triangles)
+    mesh = sector_mesh(1 // 5000, 20, 3, 1, 2, 1)
+    paths = write_triangulation_plots(mesh.nodes, mesh.triangles)
     println("wrote ", paths.p_path)
     println("wrote ", paths.q_path)
 end
