@@ -20,6 +20,10 @@ data = load(fullfile(directory, 'mass_matrix.mat'));
 mass = infsup(sparse(data.i, data.j, data.lo, data.n, data.n), ...
               sparse(data.i, data.j, data.hi, data.n, data.n));
 
+% Next two lines symmetrise the input matrices
+stiffness = hull(stiffness, stiffness');
+mass = hull(mass, mass');
+
 [lambda, index] = veigs(stiffness, mass, 2, 'sa');
 target = find(index == 2);
 if numel(target) ~= 1

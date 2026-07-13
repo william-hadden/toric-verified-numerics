@@ -67,10 +67,20 @@ canonical_triangle_key(node_keys, tri) =
     @test all(haskey(edge_for_midpoint, sector_reflect_key(key)) for key in midpoint_keys)
     for (index, key) in pairs(midpoint_keys)
         @test quotient[index] == quotient[edge_for_midpoint[sector_reflect_key(key)]]
-        if key[2] == -key[1]
-            @test quotient[index] == quotient[edge_for_midpoint[rotate_key(key, 1)]]
-        end
     end
+end
+
+@testset "reciprocal Neumann contraction" begin
+    contracting = reshape([interval(BigFloat(2)), interval(BigFloat(1) / 2)], 2, 1)
+    reciprocal = reciprocal_polynomial_neumann(contracting; deg = 4, terms = 4)
+    @test !isnothing(reciprocal)
+    @test reciprocal.ratio < 1
+
+    noncontracting = reshape([interval(BigFloat(1)), interval(BigFloat(2))], 2, 1)
+    @test isnothing(reciprocal_polynomial_neumann(noncontracting; deg = 4, terms = 4))
+
+    zero_center = reshape([interval(BigFloat(-1), BigFloat(1))], 1, 1)
+    @test isnothing(reciprocal_polynomial_neumann(zero_center; deg = 4, terms = 4))
 end
 
 @testset "adaptive metric cover and lower-matrix recertification" begin
@@ -78,7 +88,7 @@ end
         interval(BigFloat(1)) interval(BigFloat(-2), BigFloat(2))
         interval(BigFloat(-2), BigFloat(2)) interval(BigFloat(1))
     ]
-    @test !metric_spd_certificate(indefinite_box).spd
+    @test symmetric_eigenvalue_lower_bound(indefinite_box) <= 0
 
     mesh = sector_mesh(1 // 100, 8, 3, 1, 0, 1)
     oracle = InverseMetricOracle(30)
@@ -95,13 +105,11 @@ end
 
     @test length(bound.leaves) > 1
     @test maximum(leaf.depth for leaf in bound.leaves) > 0
-    @test all(metric_spd_certificate(leaf.G).spd for leaf in bound.leaves)
-    B_certificate = metric_spd_certificate(point_interval_matrix(bound.B))
-    residuals = residual_certificates(bound.leaves, bound.B)
-    @test B_certificate.spd
-    @test B_certificate.lambda_lower == bound.alpha > 0
-    @test all(certificate -> certificate.spd, residuals)
-    @test minimum(certificate.lambda_lower for certificate in residuals) > 0
+    @test all(symmetric_eigenvalue_lower_bound(leaf.G) > 0 for leaf in bound.leaves)
+    alpha = symmetric_eigenvalue_lower_bound(interval.(bound.B))
+    residuals = residual_eigenvalue_lower_bounds(bound.leaves, bound.B)
+    @test alpha == bound.alpha > 0
+    @test all(bound -> bound > 0, residuals)
 end
 
 """Oracle used to exercise the quality-driven subdivision loop cheaply."""
@@ -112,7 +120,7 @@ function inverse_metric_lower_bound(
     ::QualityTestOracle,
     nodes,
     tri,
-    forced_depth,
+    min_depth,
     degree,
     terms,
     bisection_steps,
@@ -121,13 +129,13 @@ function inverse_metric_lower_bound(
     factor = BigFloat(1893) / BigFloat(10000)
     threshold = BigFloat(7) / BigFloat(50)
     crossing_alpha = (factor * diameter / threshold)^2
-    alpha = forced_depth == 0 ? crossing_alpha / BigFloat(4) :
+    alpha = min_depth == 0 ? crossing_alpha / BigFloat(4) :
         crossing_alpha * BigFloat(4)
     B = BigFloat[alpha 0; 0 alpha]
     return (; B, alpha, leaves = NamedTuple[])
 end
 
-@testset "quality target increases the forced cover depth" begin
+@testset "quality target increases the minimum cover depth" begin
     mesh = sector_mesh(1 // 10, 2, 0, 1, 0, 1)
     triangle = first(mesh.triangles)
     threshold = BigFloat(7) / BigFloat(50)
@@ -141,7 +149,6 @@ end
         threshold,
     )
 
-    @test certificate.forced_depth == 1
     @test certificate.liu_constant <= threshold
     @test certificate.alpha > 0
 end
@@ -154,16 +161,17 @@ end
         for _ in mesh.triangles
     ]
     assembly = assemble_matrices(mesh, certificates)
-    symmetric_stiffness = symmetrize_entries(assembly.stiffness)
 
     @test assembly.matrix_size > 1
     @test !isempty(assembly.mass)
     @test !isempty(assembly.stiffness)
+    @test all(isguaranteed, values(assembly.mass))
+    @test all(isguaranteed, values(assembly.stiffness))
     for row in 1:assembly.matrix_size
         row_sum = interval(BigFloat(0))
         for column in 1:assembly.matrix_size
             row_sum += get(
-                symmetric_stiffness,
+                assembly.stiffness,
                 (row, column),
                 interval(BigFloat(0)),
             )

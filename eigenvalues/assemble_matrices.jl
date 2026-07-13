@@ -1,10 +1,13 @@
 using IntervalArithmetic
 
+# Select the BigFloat-compatible interval matrix product without per-call fallback.
+IntervalArithmetic.configure(; matmul = :slow)
+
 include(joinpath(@__DIR__, "triangulation.jl"))
 include(joinpath(@__DIR__, "inverse_metric_bounds.jl"))
 
-"""Return the signed double area of a triangle with interval coordinates."""
-function triangle_double_area(nodes, tri)
+"""Return twice the signed physical area using interval-enclosed coordinates."""
+function twice_signed_triangle_area(nodes, tri)
     x1, y1 = nodes[tri[1], 1], nodes[tri[1], 2]
     x2, y2 = nodes[tri[2], 1], nodes[tri[2], 2]
     x3, y3 = nodes[tri[3], 1], nodes[tri[3], 2]
@@ -16,7 +19,7 @@ function cr_gradients(nodes, tri)
     x1, y1 = nodes[tri[1], 1], nodes[tri[1], 2]
     x2, y2 = nodes[tri[2], 1], nodes[tri[2], 2]
     x3, y3 = nodes[tri[3], 1], nodes[tri[3], 2]
-    determinant = triangle_double_area(nodes, tri)
+    determinant = twice_signed_triangle_area(nodes, tri)
     inf(determinant) > 0 || error("Triangle $tri is not positively oriented")
     return -interval(BigFloat(2)) * [
         y2 - y3  x3 - x2
@@ -25,10 +28,10 @@ function cr_gradients(nodes, tri)
     ] / determinant
 end
 
-"""Return the local diagonal Crouzeix--Raviart mass matrix."""
+"""Return the local diagonal Crouzeix--Raviart mass matrix, i.e. the mass
+matrix for CR elements on one single triangle."""
 function local_cr_mass_matrix(nodes, tri)
-    area = triangle_double_area(nodes, tri) / interval(BigFloat(2))
-    inf(area) > 0 || error("Triangle $tri has nonpositive area")
+    area = twice_signed_triangle_area(nodes, tri) / interval(BigFloat(2))
     mass = fill(zero(area), 3, 3)
     for index in 1:3
         mass[index, index] = area / interval(BigFloat(3))
@@ -36,37 +39,22 @@ function local_cr_mass_matrix(nodes, tri)
     return mass
 end
 
-"""Return the local stiffness matrix for a constant point coefficient `B`."""
+"""Return the local stiffness matrix for a constant inner product `B`."""
 function local_cr_stiffness_matrix(nodes, tri, B)
-    size(B) == (2, 2) || throw(ArgumentError("B must be a 2-by-2 matrix"))
-    area = triangle_double_area(nodes, tri) / interval(BigFloat(2))
+    area = twice_signed_triangle_area(nodes, tri) / interval(BigFloat(2))
     gradients = cr_gradients(nodes, tri)
-    coefficient = point_interval_matrix(B)
-    stiffness = fill(zero(area * coefficient[1, 1]), 3, 3)
-    for a in 1:3, b in 1:3
-        stiffness[a, b] = area * (
-            gradients[a, 1] * coefficient[1, 1] * gradients[b, 1] +
-            gradients[a, 1] * coefficient[1, 2] * gradients[b, 2] +
-            gradients[a, 2] * coefficient[2, 1] * gradients[b, 1] +
-            gradients[a, 2] * coefficient[2, 2] * gradients[b, 2]
-        )
-    end
-    return stiffness
+    coefficient = interval.(B)
+    return area * (gradients * coefficient * transpose(gradients))
 end
 
-"""Return the three opposite edges used as local CR degrees of freedom."""
-local_cr_edges(tri) = ((tri[2], tri[3]), (tri[3], tri[1]), (tri[1], tri[2]))
+"""
+Return the canonical mesh edges associated with the local CR basis functions.
 
-"""Return a canonical ordered key for an undirected edge."""
-edge_key(i, j) = minmax(i, j)
-
-"""Insert an edge into the global CR numbering and return its index."""
-function edge_index!(edge_ids, edges, edge)
-    key = edge_key(edge...)
-    haskey(edge_ids, key) && return edge_ids[key]
-    push!(edges, key)
-    edge_ids[key] = length(edges)
-    return length(edges)
+Entry `i` joins the two vertices other than `tri[i]`, matching gradient row `i`.
+"""
+function cr_basis_edges(tri)
+    edges = triangle_edges(tri)
+    return (edges[2], edges[3], edges[1])
 end
 
 """Build the global edge degrees of freedom for a triangle list."""
@@ -75,8 +63,14 @@ function build_cr_edges(triangles)
     edges = Tuple{Int,Int}[]
     triangle_edge_ids = Tuple{Int,Int,Int}[]
     for tri in triangles
-        local_edges = local_cr_edges(tri)
-        ids = ntuple(index -> edge_index!(edge_ids, edges, local_edges[index]), 3)
+        local_edges = cr_basis_edges(tri)
+        ids = ntuple(3) do position
+            edge = local_edges[position]
+            get!(edge_ids, edge) do
+                push!(edges, edge)
+                length(edges)
+            end
+        end
         push!(triangle_edge_ids, ids)
     end
     return edges, triangle_edge_ids
@@ -93,19 +87,16 @@ function add_block!(matrix, dofs, block)
     return matrix
 end
 
-"""Rotate an integer lattice key by `steps` sixth-turns."""
-function rotate_key(key, steps::Integer)
-    steps >= 0 || throw(ArgumentError("steps must be nonnegative"))
-    for _ in 1:steps
-        key = (-key[2], key[1] + key[2])
-    end
-    return key
-end
-
-"""Reflect a sector lattice key across the lower-square diagonal."""
+"""Apply the D6 reflection exchanging the two sides of the fundamental sector
+that are not a hexagon boundary."""
 sector_reflect_key((a, b)) = (a, -a - b)
 
-"""Return exact doubled midpoint lattice keys for CR edge degrees of freedom."""
+"""
+Return twice each edge midpoint in exact lattice coordinates.
+
+For edge `(i, j)`, the corresponding result is
+`node_keys[i] + node_keys[j]`. Doubled coordinates avoid half-integers.
+"""
 function edge_midpoint_keys(edges, node_keys)
     return [
         (node_keys[i][1] + node_keys[j][1], node_keys[i][2] + node_keys[j][2])
@@ -113,44 +104,17 @@ function edge_midpoint_keys(edges, node_keys)
     ]
 end
 
-"""Find a root in a disjoint-set forest and compress its path."""
-function find_root!(parent, index)
-    while parent[index] != index
-        parent[index] = parent[parent[index]]
-        index = parent[index]
-    end
-    return index
-end
+"""
+Map each sector CR edge to its D6-invariant degree of freedom.
 
-"""Return consecutive quotient indices generated by the declared pairs."""
-function quotient_map(count::Integer, pairs)
-    parent = collect(1:count)
-    for (left, right) in pairs
-        left_root = find_root!(parent, left)
-        right_root = find_root!(parent, right)
-        left_root == right_root || (parent[right_root] = left_root)
-    end
-    root_ids = Dict{Int,Int}()
-    return [
-        get!(root_ids, find_root!(parent, index), length(root_ids) + 1)
-        for index in 1:count
-    ]
-end
-
-"""Return the D6-invariant quotient map for sector CR edge unknowns."""
+The smaller of a midpoint key and its reflection is their common orbit key.
+"""
 function d6_edge_quotient(edges, node_keys)
-    midpoints = edge_midpoint_keys(edges, node_keys)
-    edge_ids = Dict(midpoints[index] => index for index in eachindex(midpoints))
-    pairs = Tuple{Int,Int}[]
-    for index in eachindex(midpoints)
-        reflected = sector_reflect_key(midpoints[index])
-        haskey(edge_ids, reflected) && push!(pairs, (index, edge_ids[reflected]))
-        if midpoints[index][2] == -midpoints[index][1]
-            rotated = rotate_key(midpoints[index], 1)
-            haskey(edge_ids, rotated) && push!(pairs, (index, edge_ids[rotated]))
-        end
+    orbit_ids = Dict{Tuple{Int,Int},Int}()
+    return map(edge_midpoint_keys(edges, node_keys)) do midpoint
+        orbit_key = min(midpoint, sector_reflect_key(midpoint))
+        get!(orbit_ids, orbit_key, length(orbit_ids) + 1)
     end
-    return quotient_map(length(edges), pairs)
 end
 
 """Return a rigorous upper bound for the longest side of a triangle."""
@@ -167,7 +131,7 @@ end
 
 """Return the rigorous local Liu constant `0.1893 h_T/sqrt(alpha_T)`."""
 function local_liu_constant(diameter_upper, alpha_lower)
-    alpha_lower > 0 || error("The ellipticity lower bound must be positive")
+    alpha_lower > 0 || error("The eigenvalue lower bound must be positive")
     factor = interval(BigFloat(1893)) / interval(BigFloat(10000))
     value = factor * interval(diameter_upper) / sqrt(interval(alpha_lower))
     upper = sup(value)
@@ -175,24 +139,25 @@ function local_liu_constant(diameter_upper, alpha_lower)
     return upper
 end
 
-"""Certify one element, increasing the forced box depth until quality holds."""
+"""Certify one element, increasing the minimum cover depth until quality holds."""
 function certify_element(oracle, mesh, tri, degree, terms, bisection_steps, quality_threshold)
     diameter = triangle_diameter_upper(mesh.nodes, tri)
-    forced_depth = 0
+    min_depth = 0
     while true
         bound = inverse_metric_lower_bound(
             oracle,
             mesh.nodes,
             tri,
-            forced_depth,
+            min_depth,
             degree,
             terms,
             bisection_steps,
         )
         liu_constant = local_liu_constant(diameter, bound.alpha)
-        liu_constant <= quality_threshold &&
-            return (; B = bound.B, alpha = bound.alpha, liu_constant, forced_depth)
-        forced_depth += 1
+        if liu_constant <= quality_threshold
+            return (; B = bound.B, alpha = bound.alpha, liu_constant)
+        end
+        min_depth += 1
     end
 end
 
@@ -206,7 +171,6 @@ function certify_elements(
     quality_target,
     progress_interval,
 )
-    progress_interval > 0 || throw(ArgumentError("progress_interval must be positive"))
     target = inf(interval(BigFloat(numerator(quality_target))) /
                  interval(BigFloat(denominator(quality_target))))
     certificates = Vector{Any}(undef, length(mesh.triangles))
@@ -278,18 +242,6 @@ function write_mat4(path, entries)
     end
 end
 
-"""Widen paired interval entries so a dictionary matrix is exactly symmetric."""
-function symmetrize_entries(matrix)
-    symmetric = copy(matrix)
-    for (i, j) in collect(keys(matrix))
-        haskey(matrix, (j, i)) || continue
-        value = hull(symmetric[(i, j)], symmetric[(j, i)])
-        symmetric[(i, j)] = value
-        symmetric[(j, i)] = value
-    end
-    return symmetric
-end
-
 """Save a sparse interval matrix as outward-rounded MATLAB endpoint arrays."""
 function save_interval_matrix(path, matrix, size_)
     entries = sort!(collect(keys(matrix)))
@@ -302,18 +254,16 @@ function save_interval_matrix(path, matrix, size_)
     ])
 end
 
-"""Write the fixed stiffness and mass inputs consumed by MATLAB and INTLAB."""
+"""Write the fixed stiffness and mass inputs ingested by MATLAB and INTLAB."""
 function write_matlab_matrices(assembly, directory)
-    stiffness = symmetrize_entries(assembly.stiffness)
-    mass = symmetrize_entries(assembly.mass)
     save_interval_matrix(
         joinpath(directory, "stiff_matrix.mat"),
-        stiffness,
+        assembly.stiffness,
         assembly.matrix_size,
     )
     save_interval_matrix(
         joinpath(directory, "mass_matrix.mat"),
-        mass,
+        assembly.mass,
         assembly.matrix_size,
     )
 end

@@ -157,12 +157,8 @@ function run_orchestration()
             lambda_compact_lower,
             decimal_digits,
         )
-        maximum_cover_depth = maximum(
-            certificate.forced_depth for certificate in certificates
-        )
         println("FEM eigenvalue enclosure: [$lambda_fem_lower, $lambda_fem_upper]")
         println("Liu comparison constant: $(assembly.liu_constant)")
-        println("maximum forced metric-cover depth: $maximum_cover_depth")
         println("smooth inset lower bound: $lambda_inset_lower")
         println("compact-manifold lower bound: $lambda_compact_lower")
     end

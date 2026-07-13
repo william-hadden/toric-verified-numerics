@@ -117,14 +117,30 @@ end
 """Bound the absolute value of a local polynomial on `[-1,1]^2`."""
 poly_abs_bound(A) = sum(abs(A[i, j]) for j in axes(A, 2), i in axes(A, 1))
 
-"""Enclose a reciprocal polynomial using a finite Neumann expansion and tail."""
+"""
+Enclose `1 / D` on `[-1,1]^2` using a finite Neumann expansion.
+
+Write `D = d0 + R`, where `d0` is the midpoint of the interval constant
+coefficient. Since every local monomial has absolute value at most one,
+`poly_abs_bound(R)` bounds `|R|` throughout the box. The returned `ratio` is a
+rigorous upper bound for `|R| / |d0|`.
+
+If `ratio < 1`, the Neumann series converges uniformly. Return its truncated
+polynomial, including a rigorous geometric-series tail, together with `ratio`.
+Return `nothing` if the chosen centre is zero or contraction cannot be proved.
+"""
 function reciprocal_polynomial_neumann(D; deg::Integer, terms::Integer)
     d0 = (inf(D[1, 1]) + sup(D[1, 1])) / 2
+    if iszero(d0)
+        return nothing
+    end
     R = copy(D)
     R[1, 1] -= interval(d0)
 
     ratio = sup(poly_abs_bound(R) / interval(abs(d0)))
-    ratio < 1 || error("Neumann series does not contract: ratio = $ratio")
+    if ratio >= 1
+        return nothing
+    end
 
     P = zeros(eltype(D), 1, 1)
     Rpow = zeros(eltype(D), 1, 1)
@@ -141,5 +157,5 @@ function reciprocal_polynomial_neumann(D; deg::Integer, terms::Integer)
         (interval(abs(d0)) * (interval(BigFloat(1)) - ratio_interval)),
     )
     P[1, 1] += symmetric_interval(interval(remainder))
-    return poly_trim_with_tail(P, deg)
+    return (; polynomial = poly_trim_with_tail(P, deg), ratio)
 end

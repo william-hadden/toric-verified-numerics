@@ -27,7 +27,15 @@ function triangle_edges(tri)
     )
 end
 
-"""Construct the unrefined triangular lattice on the fundamental sector."""
+"""
+Construct the uniform base mesh of the lower fundamental sector.
+
+`delta` is the exact rational inset parameter, so the sector has vertices
+`(0, 0)`, `(1 - delta, 0)`, and `(1 - delta, -(1 - delta))`. `N` is the
+positive number of base-grid intervals along each edge. Return integer lattice
+`node_keys`, counterclockwise `triangles`. The physical coordinates for an
+integer lattice point k=(k1,k2) is p=(h/scale)*k.
+"""
 function base_sector_mesh(delta, N::Integer)
     h = (1 - delta) // N
     node_keys = Vector{Tuple{Int,Int}}(undef, (N + 1) * (N + 2) ÷ 2)
@@ -56,7 +64,18 @@ function base_sector_mesh(delta, N::Integer)
     return (; node_keys, triangles, h, scale = 1)
 end
 
-"""Mark every edge of triangles contained in the requested boundary band."""
+"""
+Return all edges of triangles wholly inside a physical-boundary band.
+
+For triangulations of the fundamental sector, these are some triangles on
+the right side of the triangulation. x=N is the right end of the triangulation.
+(`node_keys`, `triangles`) is the triangulation to apply this to.
+`inner_x` is the inclusive inner edge of the band in the same
+lattice units. The returned set contains the canonical vertex-index pair for
+every edge of each triangle whose vertices all satisfy `x >= inner_x`.
+E.g. inner_x=N gives all triangles for which all vertices have x>=N, of which
+there are none.
+"""
 function boundary_patch_edges(node_keys, triangles, inner_x)
     marked = Set{Tuple{Int,Int}}()
     for tri in triangles
@@ -67,7 +86,15 @@ function boundary_patch_edges(node_keys, triangles, inner_x)
     return marked
 end
 
-"""Mark every edge of triangles contained in either physical corner patch."""
+"""
+Return all edges of triangles wholly inside either boundary-corner patch.
+
+`node_keys` gives integer lattice coordinates, `triangles` gives vertex-index
+triples, and `inner_x` is the inclusive inner edge of the boundary band.
+`transverse_width`, in the same lattice units, bounds `-y` near the upper
+corner and `x + y` near the lower corner. The result is a set of canonical
+vertex-index pairs.
+"""
 function corner_patch_edges(node_keys, triangles, inner_x, transverse_width)
     marked = Set{Tuple{Int,Int}}()
     for tri in triangles
@@ -81,7 +108,7 @@ function corner_patch_edges(node_keys, triangles, inner_x, transverse_width)
     return marked
 end
 
-"""Complete an edge marking so no triangle has exactly two marked edges."""
+"""Promote every two-edge marking to three, leaving only green or red templates."""
 function close_edge_marking!(triangles, marked)
     changed = true
     while changed
@@ -97,14 +124,19 @@ function close_edge_marking!(triangles, marked)
     return marked
 end
 
-"""Insert the midpoint of every marked edge on the common dyadic lattice."""
+"""
+Insert the midpoint of every marked edge on the current integer lattice.
+
+Each refinement pass first doubles all `node_keys`, so every marked-edge
+midpoint has integer coordinates. Return the map from marked edges to their
+new midpoint indices.
+"""
 function insert_midpoints!(node_keys, marked)
     existing = Dict(key => index for (index, key) in pairs(node_keys))
     midpoint_ids = Dict{Tuple{Int,Int},Int}()
     for edge in sort!(collect(marked))
         u, v = edge
         sums = node_keys[u] .+ node_keys[v]
-        all(iseven, sums) || error("Marked edge $edge is not dyadically divisible")
         key = (sums[1] ÷ 2, sums[2] ÷ 2)
         haskey(existing, key) && error("Marked edge $edge already has a midpoint vertex")
         push!(node_keys, key)
@@ -114,7 +146,12 @@ function insert_midpoints!(node_keys, marked)
     return midpoint_ids
 end
 
-"""Return the two green-refinement children associated with one split edge."""
+"""
+Apply standard green refinement across one split edge.
+
+Join the edge midpoint to the opposite vertex, bisecting `tri` into two
+counterclockwise children.
+"""
 function green_children(node_keys, tri, edge, midpoint)
     u, v = edge
     opposite = only(vertex for vertex in tri if vertex != u && vertex != v)
@@ -124,7 +161,12 @@ function green_children(node_keys, tri, edge, midpoint)
     )
 end
 
-"""Return the four red-refinement children of a triangle."""
+"""
+Apply standard red refinement to a triangle.
+
+Bisect all three edges and join their midpoints, producing four
+counterclockwise children.
+"""
 function red_children(node_keys, tri, midpoint_ids)
     a, b, c = tri
     ab = midpoint_ids[minmax(a, b)]
@@ -138,7 +180,15 @@ function red_children(node_keys, tri, midpoint_ids)
     )
 end
 
-"""Apply the red-green templates selected by a closed edge marking."""
+"""
+Apply the standard red-green templates selected by a closed edge marking.
+
+A triangle with one marked edge receives green refinement into two children
+by bisecting along the marked edge;
+a triangle with all three edges marked receives red refinement into four.
+(Red/green is standard FEM terminology, see Larson-Bengzon: "The Finite Element
+Method: Theory, Implementation, and Applications", Figure 4.6 on p.102.)
+"""
 function refine_marked_triangles(node_keys, triangles, marked, midpoint_ids)
     refined = Tuple{Int,Int,Int}[]
     for tri in triangles
@@ -157,7 +207,18 @@ function refine_marked_triangles(node_keys, triangles, marked, midpoint_ids)
     return refined
 end
 
-"""Refine one graded layer next to the physical boundary."""
+"""
+Apply one red-green refinement pass next to the physical boundary.
+
+`node_keys` and `triangles` describe the current mesh, while `scale` is its
+integer-lattice denominator: a key `p` represents `h * p / scale`, where `h`
+is the base spacing returned by `base_sector_mesh`. `N` is the base resolution,
+`layers` is the boundary-band width on the first pass in base-grid layers, and
+`pass` is the one-based pass number. This pass marks triangles wholly inside a
+band of `min(N, layers + pass - 1)` layers; red-green closure may also bisect
+adjacent triangles to preserve conformity. Return the updated
+`(node_keys, triangles, scale)`.
+"""
 function refine_boundary_once(node_keys, triangles, scale, N, layers, pass)
     node_keys = [(2 * x, 2 * y) for (x, y) in node_keys]
     scale *= 2
@@ -169,7 +230,18 @@ function refine_boundary_once(node_keys, triangles, scale, N, layers, pass)
     return node_keys, triangles, scale
 end
 
-"""Refine one graded layer in the two physical corner patches."""
+"""
+Apply one red-green refinement pass in the two physical corner patches.
+
+`node_keys` and `triangles` describe the current mesh. A key `p` represents
+`h * p / scale`, where `h` is the base spacing, `scale` is the current dyadic
+denominator, and `N` is the base resolution. `layers` is each patch's width on
+the first pass in base-grid layers, and `pass` is the one-based pass number.
+For `k = min(N, layers + pass - 1)`, marked triangles lie inside
+`x >= (N - k)h` and either `-y <= kh` or `x + y <= kh`; red-green closure may
+also bisect neighboring triangles. Return the updated
+`(node_keys, triangles, scale)`.
+"""
 function refine_corners_once(node_keys, triangles, scale, N, layers, pass)
     node_keys = [(2 * x, 2 * y) for (x, y) in node_keys]
     scale *= 2
@@ -182,36 +254,34 @@ function refine_corners_once(node_keys, triangles, scale, N, layers, pass)
     return node_keys, triangles, scale
 end
 
-"""Convert exact lattice keys to outward-rounded physical coordinates."""
+"""
+Enclose the exact physical coordinates in `BigFloat` intervals.
+
+`node_keys` contains integer coordinate pairs, `h` is the exact physical
+spacing of the base lattice, and `scale` is the current dyadic lattice
+denominator. Row `i` of the returned matrix encloses the exact point
+`h * node_keys[i] / scale` at the active `BigFloat` precision.
+"""
 function interval_nodes(node_keys, h, scale)
     nodes = Matrix{Interval{BigFloat}}(undef, length(node_keys), 2)
     for (index, key) in pairs(node_keys)
         x = key[1] * h / scale
         y = key[2] * h / scale
-        nodes[index, 1] = interval(BigFloat(x, RoundDown), BigFloat(x, RoundUp))
-        nodes[index, 2] = interval(BigFloat(y, RoundDown), BigFloat(y, RoundUp))
+        nodes[index, 1] = interval(BigFloat, x)
+        nodes[index, 2] = interval(BigFloat, y)
     end
     return nodes
 end
 
-"""Validate the exact parameters of a sector triangulation."""
-function validate_mesh_parameters(
-    delta,
-    N,
-    boundary_refinements,
-    boundary_layers,
-    corner_refinements,
-    corner_layers,
-)
-    0 < delta < 1 || throw(ArgumentError("delta must lie in (0,1)"))
-    N > 0 || throw(ArgumentError("N must be positive"))
-    boundary_refinements >= 0 || throw(ArgumentError("boundary_refinements must be nonnegative"))
-    corner_refinements >= 0 || throw(ArgumentError("corner_refinements must be nonnegative"))
-    1 <= boundary_layers <= N || throw(ArgumentError("boundary_layers must lie in 1:N"))
-    1 <= corner_layers <= N || throw(ArgumentError("corner_layers must lie in 1:N"))
-end
+"""
+Construct the conforming graded mesh of the lower fundamental sector.
 
-"""Construct the conforming graded triangulation of the lower fundamental sector."""
+`delta` and `N` define the uniform base mesh. `boundary_refinements` and
+`corner_refinements` are the numbers of graded refinement passes, while
+`boundary_layers` and `corner_layers` give the corresponding patch widths on
+the first pass. Return interval coordinates `nodes`, connectivity `triangles`,
+exact integer `node_keys`, base spacing `h`, and dyadic lattice `scale`.
+"""
 function sector_mesh(
     delta,
     N,
@@ -220,14 +290,6 @@ function sector_mesh(
     corner_refinements,
     corner_layers,
 )
-    validate_mesh_parameters(
-        delta,
-        N,
-        boundary_refinements,
-        boundary_layers,
-        corner_refinements,
-        corner_layers,
-    )
     mesh = base_sector_mesh(delta, N)
     node_keys, triangles, scale = mesh.node_keys, mesh.triangles, mesh.scale
     for pass in 1:boundary_refinements
