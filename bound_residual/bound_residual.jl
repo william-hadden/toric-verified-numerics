@@ -4,7 +4,7 @@ include(joinpath(@__DIR__, "util", "io.jl"))
 include(joinpath(@__DIR__, "util", "chebyshev_algebra.jl"))
 include(joinpath(@__DIR__, "util", "problem.jl"))
 
-function compute_bound_residual_v2(coeffs_path::AbstractString; pdeg::Integer=240)
+function compute_bound_residual(coeffs_path::AbstractString; pdeg::Integer=240)
     step1 = step1_load_and_normalize_u0(coeffs_path)
     println("Step 1: Load and normalize u0 ... ok")
     println("Step 1 guaranteed: $(all(isguaranteed, step1.normalized_coeffs))")
@@ -37,11 +37,9 @@ Run the default residual-bound computation from the command line.
 """
 function main()
     setprecision(BigFloat, 200)
-    compute_bound_residual_v2(U0_PATH; pdeg = 240)
+    compute_bound_residual(U0_PATH; pdeg = 240)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
     main()
 end
-
-# exact(k) rather than true(k) 
