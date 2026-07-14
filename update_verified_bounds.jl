@@ -3,16 +3,11 @@ using Logging
 
 global_logger(NullLogger())
 
-include(joinpath(@__DIR__, "bound_residual", "util", "io.jl"))
-include(joinpath(@__DIR__, "bound_residual", "util", "chebyshev_algebra.jl"))
+include(joinpath(@__DIR__, "utils", "load_common.jl"))
 include(joinpath(@__DIR__, "bound_residual", "util", "problem.jl"))
-include(joinpath(@__DIR__, "bound_metric", "util", "io.jl"))
-include(joinpath(@__DIR__, "bound_metric", "util", "progress.jl"))
-include(joinpath(@__DIR__, "bound_metric", "util", "interval_helpers.jl"))
 include(joinpath(@__DIR__, "bound_metric", "util", "inverse_coefficients.jl"))
 include(joinpath(@__DIR__, "bound_metric", "util", "inverse_bounds.jl"))
 include(joinpath(@__DIR__, "bound_metric", "util", "inverse_truncation.jl"))
-include(joinpath(@__DIR__, "bound_metric", "util", "chebyshev_interval_evaluation.jl"))
 include(joinpath(@__DIR__, "bound_metric", "util", "inverse_subdivision_bounds.jl"))
 include(joinpath(@__DIR__, "bound_metric", "util", "curvature_bounds.jl"))
 

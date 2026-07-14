@@ -1,7 +1,6 @@
 using IntervalArithmetic
 
-include(joinpath(@__DIR__, "util", "io.jl"))
-include(joinpath(@__DIR__, "util", "chebyshev_algebra.jl"))
+include(joinpath(@__DIR__, "..", "utils", "load_common.jl"))
 include(joinpath(@__DIR__, "util", "problem.jl"))
 
 function compute_bound_residual(coeffs_path::AbstractString; pdeg::Integer=240)

@@ -2,8 +2,9 @@ import JSON
 import Printf
 
 const DEFAULT_REF_INDEX = (2, 2)
-const REPO_ROOT = normpath(joinpath(@__DIR__, "..", ".."))
+const REPO_ROOT = normpath(joinpath(@__DIR__, ".."))
 const U0_PATH = joinpath(REPO_ROOT, "data", "happrox", "coeffs-rational.csv")
+const METRIC_U0_PATH = joinpath(REPO_ROOT, "data", "happrox", "coeffs.csv")
 const VERIFIED_BOUNDS_PATH = joinpath(REPO_ROOT, "data", "verified_bounds.json")
 
 """
@@ -18,23 +19,43 @@ function parse_rational_interval(entry::AbstractString)::Interval{BigFloat}
 end
 
 """
-Load the rational coefficient matrix from the canonical CSV export.
+Load a rectangular coefficient matrix using `parse_entry` for each CSV field.
 """
-function load_rational_coeffs_csv(path::AbstractString)::Matrix{Interval{BigFloat}}
+function load_coeff_matrix_csv(path::AbstractString, parse_entry)::Matrix{Interval{BigFloat}}
     rows = Vector{Vector{Interval{BigFloat}}}()
-
     open(path, "r") do io
         for line in eachline(io)
-            push!(rows, parse_rational_interval.(split(line, ',')))
+            push!(rows, parse_entry.(split(line, ',')))
         end
     end
+    isempty(rows) && error("Coefficient CSV is empty: $path")
+    width = length(first(rows))
+    all(length(row) == width for row in rows) || error("Coefficient CSV is not rectangular: $path")
 
-    coeffs = Matrix{Interval{BigFloat}}(undef, length(rows), length(rows[1]))
+    coeffs = Matrix{Interval{BigFloat}}(undef, length(rows), width)
     for i in eachindex(rows)
         coeffs[i, :] .= rows[i]
     end
     return coeffs
 end
+
+"""Load the rational coefficient matrix from the canonical CSV export."""
+load_rational_coeffs_csv(path::AbstractString) = load_coeff_matrix_csv(path, parse_rational_interval)
+
+"""Parse a decimal metric coefficient as an outward-rounded interval."""
+function parse_metric_decimal_interval(entry::AbstractString)::Interval{BigFloat}
+    stripped = strip(entry)
+    if startswith(stripped, '"') && endswith(stripped, '"') && length(stripped) >= 2
+        stripped = stripped[2:end - 1]
+    end
+    occursin('/', stripped) && error(
+        "Metric coefficient CSV entries must be decimal strings, got rational entry: $stripped",
+    )
+    return parse_bound_value(stripped)
+end
+
+"""Load a rectangular CSV matrix of decimal metric coefficients."""
+load_metric_coeffs_csv(path::AbstractString) = load_coeff_matrix_csv(path, parse_metric_decimal_interval)
 
 """
 Read one top-level bound dictionary from the verified bounds JSON file.
@@ -92,59 +113,3 @@ end
 
 write_bound_entry(group_key::Symbol, value_key::Symbol, value; path::AbstractString = VERIFIED_BOUNDS_PATH) =
     write_bound_entry(String(group_key), String(value_key), value; path)
-
-"""
-Return the one-dimensional Chebyshev-Lobatto points `cos(pi*k/N)` on `[-1,1]`.
-"""
-cheb_grid(N::Integer) = cospi.(interval.(BigFloat.(collect(0:N))) ./ exact(BigFloat(N)))
-
-"""
-Return the tensor-product grids on `[0,1]^2` used by the exported coefficients.
-"""
-function make_grids(N::Integer)
-    half = exact(BigFloat(0.5))
-    xarr = reverse(half .+ half .* cheb_grid(N))
-    yarr = copy(xarr)
-    return xarr, yarr
-end
-
-"""
-Return the values `T_0(z), ..., T_degree(z)` by the three-term recurrence.
-"""
-function chebyshev_values(z, degree::Integer)
-    degree >= 0 || error("Chebyshev degree must be nonnegative")
-    T = typeof(z)
-    values = Vector{T}(undef, degree + 1)
-    values[1] = one(z)
-
-    if degree >= 1
-        values[2] = z
-        for n in 2:degree
-            values[n + 1] = exact(2) * z * values[n] - values[n - 1]
-        end
-    end
-
-    return values
-end
-
-"""
-Evaluate a tensor-product Chebyshev series at a single point `(x, y)` in `[0,1]^2`.
-"""
-function evaluate_coeffs_at_point(coeffs::AbstractMatrix{<:Number}, x::Real, y::Real)
-    Tx = chebyshev_values(exact(2) * x - exact(1), size(coeffs, 1) - 1)
-    Ty = chebyshev_values(exact(1) - exact(2) * y, size(coeffs, 2) - 1)
-
-    # Initialise values as zero with type being the more general type of the types among
-    # coeffs, Tx. Usually expect coeffs to be Interval{BigFloat} and Tx to be BigFloat.
-    value = zero(promote_type(eltype(coeffs), eltype(Tx))) 
-
-    for j in axes(coeffs, 2)
-        inner = zero(promote_type(eltype(coeffs), eltype(Tx)))
-        for i in axes(coeffs, 1)
-            inner += coeffs[i, j] * Tx[i]
-        end
-        value += inner * Ty[j]
-    end
-
-    return value
-end

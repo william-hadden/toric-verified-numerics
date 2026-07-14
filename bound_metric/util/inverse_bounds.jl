@@ -1,15 +1,3 @@
-function chebyshev_coeff_tail_bound(coeffs::AbstractMatrix{<:Number})
-    interval_coeffs = intervalize_coefficients(coeffs)
-    tail_bound = zero(abs(interval_coeffs[1, 1]))
-
-    for j in axes(interval_coeffs, 2), i in axes(interval_coeffs, 1)
-        i == 1 && j == 1 && continue
-        tail_bound += abs(interval_coeffs[i, j])
-    end
-
-    return tail_bound
-end
-
 function compute_inverse_bound_by_coefficient_bounds(inverse_coeffs)
     A11_bound = chebyshev_coeff_sup_bound(inverse_coeffs.A11)
     A12_bound = chebyshev_coeff_sup_bound(inverse_coeffs.A12)
@@ -42,11 +30,6 @@ function compute_inverse_bound_by_coefficient_bounds(inverse_coeffs)
         u22_bound,
     )
 end
-
-bound_upper(x) = x
-bound_upper(x::Interval) = sup(x)
-bound_lower(x) = x
-bound_lower(x::Interval) = inf(x)
 
 function print_inverse_bound_summary(step4)
     println()

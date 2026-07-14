@@ -18,6 +18,125 @@ second_derivative_coeffs(pack, a::Integer, b::Integer) =
     a != b ? pack.xy :
     error("Expected derivative dimensions 1 or 2")
 
+"""
+Compute the exact coefficient-space numerator of `∂ₐ∂ᵦ(A / D)` over `D³`.
+
+This untruncated form is useful for small problems and regression checks; the
+certification pipeline uses `quotient_derivative_numerator_enclosure` below.
+"""
+function quotient_second_derivative_numerator(
+    A::AbstractMatrix{<:Number},
+    D::AbstractMatrix{<:Number},
+    D2::AbstractMatrix{<:Number},
+    a::Integer,
+    b::Integer;
+    progress = nothing,
+)
+    return quotient_second_derivative_numerator(
+        derivative_coeff_pack(A), derivative_coeff_pack(D), D2, a, b; progress,
+    )
+end
+
+function quotient_second_derivative_numerator(A_derivs, D_derivs, D2, a::Integer, b::Integer; progress = nothing)
+    A, D = A_derivs.f, D_derivs.f
+    A_a, A_b = first_derivative_coeffs(A_derivs, a), first_derivative_coeffs(A_derivs, b)
+    D_a, D_b = first_derivative_coeffs(D_derivs, a), first_derivative_coeffs(D_derivs, b)
+    A_ab = second_derivative_coeffs(A_derivs, a, b)
+    D_ab = second_derivative_coeffs(D_derivs, a, b)
+
+    term1 = cheb_mul_fast(A_ab, D2)
+    term2_inner = cheb_add(
+        cheb_add(cheb_mul_fast(A_a, D_b), cheb_mul_fast(A_b, D_a)),
+        cheb_mul_fast(A, D_ab),
+    )
+    term2 = cheb_mul_fast(term2_inner, D)
+    term3 = cheb_scale(cheb_mul_fast(cheb_mul_fast(A, D_a), D_b), interval_constant(2))
+    advance_progress!(progress, 7)
+    return cheb_add(cheb_sub(term1, term2), term3)
+end
+
+"""Assemble Ricci numerator coefficients without degree truncation."""
+function compute_ricci_numerators_coefficient_space(inverse_coeffs; progress = nothing)
+    D = inverse_coeffs.D
+    D2 = cheb_mul_fast(D, D)
+    D_derivs = derivative_coeff_pack(D)
+    A11 = derivative_coeff_pack(inverse_coeffs.A11)
+    A12 = derivative_coeff_pack(inverse_coeffs.A12)
+    A22 = derivative_coeff_pack(inverse_coeffs.A22)
+
+    u11_xx = quotient_second_derivative_numerator(A11, D_derivs, D2, 1, 1; progress)
+    u11_xy = quotient_second_derivative_numerator(A11, D_derivs, D2, 1, 2; progress)
+    u12_xx = quotient_second_derivative_numerator(A12, D_derivs, D2, 1, 1; progress)
+    u12_xy = quotient_second_derivative_numerator(A12, D_derivs, D2, 1, 2; progress)
+    u12_yy = quotient_second_derivative_numerator(A12, D_derivs, D2, 2, 2; progress)
+    u22_xy = quotient_second_derivative_numerator(A22, D_derivs, D2, 1, 2; progress)
+    u22_yy = quotient_second_derivative_numerator(A22, D_derivs, D2, 2, 2; progress)
+
+    half = interval_constant(-1) / exact(2)
+    return (;
+        R11_num = cheb_scale(cheb_add(u11_xx, u12_xy), half),
+        R12_num = cheb_scale(cheb_add(u11_xy, u12_yy), half),
+        R21_num = cheb_scale(cheb_add(u12_xx, u22_xy), half),
+        R22_num = cheb_scale(cheb_add(u12_xy, u22_yy), half),
+        D,
+    )
+end
+
+function compute_ricci_numerators_from_inverse_coeffs(
+    inverse_coeffs; progress = nothing, method::Symbol = :coefficient_space, pdeg::Integer = 0,
+)
+    method === :coefficient_space &&
+        return compute_ricci_numerators_coefficient_space(inverse_coeffs; progress)
+    if method === :truncated_coefficient_space
+        pdeg > 0 || error("Truncated Ricci numerator construction requires pdeg > 0")
+        exact_coeffs = compute_ricci_numerators_coefficient_space(inverse_coeffs; progress)
+        truncate_and_absorb(coeffs) = begin
+            trunc = truncate_coeffs_with_tail(coeffs, pdeg)
+            inflate_constant_mode!(trunc.coeffs, trunc.tail)
+        end
+        return (;
+            R11_num = truncate_and_absorb(exact_coeffs.R11_num),
+            R12_num = truncate_and_absorb(exact_coeffs.R12_num),
+            R21_num = truncate_and_absorb(exact_coeffs.R21_num),
+            R22_num = truncate_and_absorb(exact_coeffs.R22_num),
+            D = truncate_and_absorb(exact_coeffs.D),
+            pdeg,
+        )
+    end
+    error("Unknown Ricci numerator method: $method")
+end
+
+function ricci_bounds_from_numerators(ricci_coeffs, D_lower)
+    entry_bound(num) = chebyshev_coeff_sup_bound(num) / (D_lower^3)
+    R11_bound = entry_bound(ricci_coeffs.R11_num)
+    R12_bound = entry_bound(ricci_coeffs.R12_num)
+    R21_bound = entry_bound(ricci_coeffs.R21_num)
+    R22_bound = entry_bound(ricci_coeffs.R22_num)
+    squared = interval_constant(2) * (
+        R11_bound^2 + interval_constant(2) * R12_bound * R21_bound + R22_bound^2
+    )
+    return (;
+        R11_num = ricci_coeffs.R11_num,
+        R12_num = ricci_coeffs.R12_num,
+        R21_num = ricci_coeffs.R21_num,
+        R22_num = ricci_coeffs.R22_num,
+        R11_bound, R12_bound, R21_bound, R22_bound,
+        ricci_norm_squared_bound = squared,
+        ricci_norm_bound = sqrt(squared),
+        D_lower,
+    )
+end
+
+function compute_ricci_bound_from_inverse_coeffs(
+    inverse_coeffs, inverse_bounds; progress = nothing,
+    numerator_method::Symbol = :coefficient_space, pdeg::Integer = 0,
+)
+    coeffs = compute_ricci_numerators_from_inverse_coeffs(
+        inverse_coeffs; progress, method = numerator_method, pdeg,
+    )
+    return ricci_bounds_from_numerators(coeffs, inverse_bounds.D_lower)
+end
+
 function coeff_sup_bound_number(coeffs::AbstractMatrix{<:Number})
     return sup(chebyshev_coeff_sup_bound(intervalize_coefficients(coeffs)))
 end

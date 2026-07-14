@@ -40,6 +40,19 @@ julia --project=. path/to/script.jl
 
 so scripts run inside the project environment.
 
+## Code layout
+
+- `Chebyshev/` contains the shared tensor-product Chebyshev algebra,
+  differentiation, interval/local-box evaluation, and rigorous truncation
+  helpers.
+- `utils/` contains shared data I/O, interval construction, progress reporting,
+  and `load_common.jl`, the common include entry point used by executable scripts.
+- `bound_metric/` contains only inverse-metric and curvature certificate code.
+- `bound_residual/` contains only the Monge–Ampère residual computation.
+
+Scripts that need the shared numerical helpers should include
+`utils/load_common.jl` rather than assembling their own list of utility files.
+
 ## Tests
 
 Run the full test suite with:
@@ -55,11 +68,13 @@ julia --project=. test/runtests.jl quotient
 julia --project=. test/runtests.jl ricci
 julia --project=. test/runtests.jl inverse
 julia --project=. test/runtests.jl cheb
+julia --project=. test/runtests.jl utils
 ```
 
 - `quotient` checks the coefficient-space quotient differentiation formula in cases where `D = 1`.
 - `ricci` checks Ricci assembly against a polynomial inverse metric with known exact answer.
 - `inverse` runs a small rigorous end-to-end inverse/Ricci certificate on embedded test data.
 - `cheb` runs the Chebyshev multiplication tests.
+- `utils` checks shared CSV/JSON I/O, interval helpers, evaluation, and truncation.
 
 ## TODO

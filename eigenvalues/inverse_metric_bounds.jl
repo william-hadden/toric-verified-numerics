@@ -1,14 +1,8 @@
 using IntervalArithmetic
 
-include(joinpath(@__DIR__, "..", "bound_residual", "util", "io.jl"))
-include(joinpath(@__DIR__, "..", "bound_residual", "util", "chebyshev_algebra.jl"))
-include(joinpath(@__DIR__, "..", "bound_residual", "util", "problem.jl"))
-include(joinpath(@__DIR__, "..", "bound_metric", "util", "io.jl"))
-include(joinpath(@__DIR__, "..", "bound_metric", "util", "progress.jl"))
-include(joinpath(@__DIR__, "..", "bound_metric", "util", "interval_helpers.jl"))
+include(joinpath(@__DIR__, "..", "utils", "load_common.jl"))
 include(joinpath(@__DIR__, "..", "bound_metric", "util", "inverse_coefficients.jl"))
 include(joinpath(@__DIR__, "..", "bound_metric", "util", "inverse_truncation.jl"))
-include(joinpath(@__DIR__, "..", "bound_metric", "util", "chebyshev_interval_evaluation.jl"))
 include(joinpath(@__DIR__, "util", "local_polynomials.jl"))
 
 """Cached coefficient data used to enclose the inverse metric on local boxes."""

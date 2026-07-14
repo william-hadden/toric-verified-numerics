@@ -1,3 +1,4 @@
+# Lightweight terminal progress reporting shared by long-running bounds.
 mutable struct TextProgress
     label::String
     total::Int

@@ -1,3 +1,4 @@
+# Core tensor-product Chebyshev algebra shared by all verified computations.
 const _CHEB_HAS_FFTW = let
     try
         @eval import FFTW
@@ -9,6 +10,23 @@ end
 
 const _CHEB_INTERVAL_EVAL_CACHE = Dict{Tuple{Int, DataType, Int}, Any}()
 const _CHEB_INTERVAL_RECOVERY_CACHE = Dict{Tuple{Int, DataType, Int}, Any}()
+
+cheb_matmul(A::AbstractMatrix, B::AbstractMatrix) = A * B
+
+cheb_matmul(A::AbstractMatrix{<:Interval}, B::AbstractMatrix{<:Interval}) =
+    Base.invokelatest(*, A, B)
+
+function cheb_matvec(A::AbstractMatrix{<:Interval}, v::AbstractVector{<:Interval})
+    return vec(cheb_matmul(A, reshape(collect(v), :, 1)))
+end
+
+"""Return the constant tensor-product Chebyshev series with value `c`."""
+function cheb_constant(c)
+    T = promote_type(typeof(c), Float64)
+    coeffs = zeros(T, 1, 1)
+    coeffs[1, 1] = c
+    return coeffs
+end
 
 """
 Return a dense zero coefficient array with the requested bidegree.
@@ -132,6 +150,33 @@ function cheb_add(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number})
     return cheb_trim_exact(out)
 end
 
+"""Subtract two tensor-product Chebyshev series."""
+function cheb_sub(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number})
+    degx = max(size(A, 1), size(B, 1)) - 1
+    degy = max(size(A, 2), size(B, 2)) - 1
+    T = promote_type(eltype(A), eltype(B))
+    out = cheb_zero(degx, degy, T)
+
+    for j in axes(A, 2), i in axes(A, 1)
+        out[i, j] += A[i, j]
+    end
+    for j in axes(B, 2), i in axes(B, 1)
+        out[i, j] -= B[i, j]
+    end
+
+    return cheb_trim_exact(out)
+end
+
+"""Scale a tensor-product Chebyshev series by `c`."""
+function cheb_scale(A::AbstractMatrix{<:Number}, c)
+    T = promote_type(eltype(A), typeof(c))
+    out = Matrix{T}(undef, size(A)...)
+    for I in eachindex(A)
+        out[I] = A[I] * c
+    end
+    return cheb_trim_exact(out)
+end
+
 """
 Add a scalar to the constant mode of a coefficient array.
 """
@@ -241,7 +286,7 @@ function cheb_coeffs_to_lobatto_values_1d(coeffs::AbstractVector{<:Interval})
         return [coeffs[1]]
     end
 
-    return cheb_interval_eval_matrix(n - 1, T) * collect(coeffs)
+    return cheb_matvec(cheb_interval_eval_matrix(n - 1, T), coeffs)
 end
 
 """
@@ -281,7 +326,7 @@ function cheb_lobatto_values_to_coeffs_1d(values::AbstractVector{<:Interval})
         return [values[1]]
     end
 
-    return cheb_interval_recovery_matrix(n - 1, T) * collect(values)
+    return cheb_matvec(cheb_interval_recovery_matrix(n - 1, T), values)
 end
 
 """
@@ -330,7 +375,7 @@ function cheb_coeffs_to_lobatto_values_2d(coeffs::AbstractMatrix{<:Interval})
     T = eltype(coeffs)
     Cx = cheb_interval_eval_matrix(size(coeffs, 1) - 1, T)
     Cy = cheb_interval_eval_matrix(size(coeffs, 2) - 1, T)
-    return Cx * Matrix(coeffs) * Cy
+    return cheb_matmul(cheb_matmul(Cx, Matrix(coeffs)), Cy)
 end
 
 """
@@ -349,7 +394,7 @@ function cheb_lobatto_values_to_coeffs_2d(values::AbstractMatrix{<:Interval})
     T = eltype(values)
     Rx = cheb_interval_recovery_matrix(size(values, 1) - 1, T)
     Ry = cheb_interval_recovery_matrix(size(values, 2) - 1, T)
-    return Rx * Matrix(values) * Ry
+    return cheb_matmul(cheb_matmul(Rx, Matrix(values)), Ry)
 end
 
 """
@@ -394,18 +439,24 @@ Multiply two tensor-product interval Chebyshev series by the Lobatto-grid/DCT
 trick, using only interval arithmetic in the transforms.
 """
 function cheb_mul2_interval_dct(A::AbstractMatrix{<:Interval}, B::AbstractMatrix{<:Interval})
-    degx = size(A, 1) + size(B, 1) - 2
-    degy = size(A, 2) + size(B, 2) - 2
-    T = promote_type(eltype(A), eltype(B))
+    previous = IntervalArithmetic.configure().matmul
+    previous === :fast || IntervalArithmetic.configure(; matmul = :fast)
+    try
+        degx = size(A, 1) + size(B, 1) - 2
+        degy = size(A, 2) + size(B, 2) - 2
+        T = promote_type(eltype(A), eltype(B))
 
-    A_pad = cheb_pad(Matrix{T}(A), degx, degy)
-    B_pad = cheb_pad(Matrix{T}(B), degx, degy)
+        A_pad = cheb_pad(Matrix{T}(A), degx, degy)
+        B_pad = cheb_pad(Matrix{T}(B), degx, degy)
 
-    valuesA = cheb_coeffs_to_lobatto_values_2d(A_pad)
-    valuesB = cheb_coeffs_to_lobatto_values_2d(B_pad)
-    coeffs = cheb_lobatto_values_to_coeffs_2d(valuesA .* valuesB)
+        valuesA = cheb_coeffs_to_lobatto_values_2d(A_pad)
+        valuesB = cheb_coeffs_to_lobatto_values_2d(B_pad)
+        coeffs = cheb_lobatto_values_to_coeffs_2d(valuesA .* valuesB)
 
-    return cheb_trim_exact(coeffs)
+        return cheb_trim_exact(coeffs)
+    finally
+        previous === :fast || IntervalArithmetic.configure(; matmul = previous)
+    end
 end
 
 """
@@ -455,6 +506,22 @@ function cheb_mul2(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number}; met
     else
         error("Unknown Chebyshev multiplication method: $method")
     end
+end
+
+"""Multiply intervalized Chebyshev series with the rigorous DCT method."""
+function cheb_mul_fast(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number})
+    return cheb_mul2(intervalize_coefficients(A), intervalize_coefficients(B); method = :interval_dct)
+end
+
+"""Multiply a collection of Chebyshev series with rigorous interval arithmetic."""
+function cheb_product_fast(series; progress = nothing)
+    isempty(series) && return cheb_constant(interval_constant(1))
+    out = first(series)
+    for k in 2:length(series)
+        out = cheb_mul_fast(out, series[k])
+        advance_progress!(progress)
+    end
+    return out
 end
 
 """
@@ -511,17 +578,17 @@ function build_lobatto_derivative_pack(u_vals::AbstractMatrix{<:Number}; pdeg::I
     Dx = exact(2) .* Dxξ
     Dy = -exact(2) .* Dyη
 
-    ux  = Dx * u_vals
-    uy  = u_vals * transpose(Dy)
+    ux  = cheb_matmul(Dx, u_vals)
+    uy  = cheb_matmul(u_vals, transpose(Dy))
 
-    uxx = Dx * ux
-    uyy = uy * transpose(Dy)
-    uxy = ux * transpose(Dy)
+    uxx = cheb_matmul(Dx, ux)
+    uyy = cheb_matmul(uy, transpose(Dy))
+    uxy = cheb_matmul(ux, transpose(Dy))
 
-    uxxx = Dx * uxx
-    uxxy = uxx * transpose(Dy)
-    uxyy = uxy * transpose(Dy)
-    uyyy = uyy * transpose(Dy)
+    uxxx = cheb_matmul(Dx, uxx)
+    uxxy = cheb_matmul(uxx, transpose(Dy))
+    uxyy = cheb_matmul(uxy, transpose(Dy))
+    uyyy = cheb_matmul(uyy, transpose(Dy))
     
     zξ = [cospi(interval(BigFloat(k)) / exact(BigFloat(Nx))) for k in 0:Nx]
     zη = [cospi(interval(BigFloat(k)) / exact(BigFloat(Ny))) for k in 0:Ny]
@@ -543,8 +610,8 @@ function build_lobatto_first_derivative_pack(u_vals::AbstractMatrix{<:Number}; p
     Dx = exact(2) .* Dxξ
     Dy = -exact(2) .* Dyη
 
-    ux  = Dx * u_vals
-    uy  = u_vals * transpose(Dy)
+    ux  = cheb_matmul(Dx, u_vals)
+    uy  = cheb_matmul(u_vals, transpose(Dy))
     
     zξ = [cospi(interval(BigFloat(k)) / exact(BigFloat(Nx))) for k in 0:Nx]
     zη = [cospi(interval(BigFloat(k)) / exact(BigFloat(Ny))) for k in 0:Ny]

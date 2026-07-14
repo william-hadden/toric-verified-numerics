@@ -1,10 +1,5 @@
 const DEL_PEZZO_NORMALS = ((-1, 1), (0, 1), (1, 0), (1, -1), (0, -1), (-1, 0))
 
-function compute_second_derivatives(coefficients::AbstractMatrix{<:Number})
-    pack = build_derivative_pack(intervalize_coefficients(coefficients))
-    return (; uxx = pack.uxx, uxy = pack.uxy, uyy = pack.uyy)
-end
-
 function facet_series()
     half = interval_half()
 

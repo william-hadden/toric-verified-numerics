@@ -1,6 +1,6 @@
 using IntervalArithmetic
 
-include(joinpath(@__DIR__, "..", "bound_residual", "util", "io.jl"))
+include(joinpath(@__DIR__, "..", "utils", "io.jl"))
 
 """
 Return the Sobolev embedding and multiplication constants used in the fixed-point

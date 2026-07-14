@@ -7,8 +7,7 @@ using IntervalArithmetic
 
 test_filter = isempty(ARGS) ? "all" : ARGS[1]
 
-include(joinpath(@__DIR__, "..", "bound_residual", "util", "io.jl"))
-include(joinpath(@__DIR__, "..", "bound_residual", "util", "chebyshev_algebra.jl"))
+include(joinpath(@__DIR__, "..", "utils", "load_common.jl"))
 include(joinpath(@__DIR__, "..", "bound_metric", "bound_inverse.jl"))
 include(joinpath(@__DIR__, "..", "bound_metric", "bound_ricci.jl"))
 include(joinpath(@__DIR__, "metric_geometry_test_helpers.jl"))
@@ -70,6 +69,10 @@ end
 
 if test_filter in ("all", "eigenvalues")
     include(joinpath(@__DIR__, "eigenvalue_assembly_tests.jl"))
+end
+
+if test_filter in ("all", "utils")
+    include(joinpath(@__DIR__, "shared_utils_tests.jl"))
 end
 
 if test_filter in ("all", "cheb")

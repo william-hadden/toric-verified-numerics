@@ -1,7 +1,9 @@
+# Interval and local-box evaluation of tensor-product Chebyshev series.
 """
 Evaluate T_0(x), ..., T_N(x) on an interval x using recurrence.
 """
-function cheb_values_on_interval(x, N::Integer)
+function chebyshev_values(x, N::Integer)
+    N >= 0 || error("Chebyshev degree must be nonnegative")
     T = Vector{typeof(x)}(undef, N + 1)
 
     T[1] = one(x)          # T_0
@@ -25,8 +27,8 @@ coeffs[i,j] corresponds to T_{i-1}(x) T_{j-1}(y).
 function eval_cheb_2d_interval(coeffs::AbstractMatrix, xbox, ybox)
     Nx, Ny = size(coeffs)
 
-    Tx = cheb_values_on_interval(xbox, Nx - 1)
-    Ty = cheb_values_on_interval(ybox, Ny - 1)
+    Tx = chebyshev_values(xbox, Nx - 1)
+    Ty = chebyshev_values(ybox, Ny - 1)
 
     s = zero(coeffs[1, 1] * Tx[1] * Ty[1])
 
@@ -35,6 +37,34 @@ function eval_cheb_2d_interval(coeffs::AbstractMatrix, xbox, ybox)
     end
 
     return s
+end
+
+"""Return the Chebyshev-Lobatto points `cos(pi*k/N)` on `[-1,1]`."""
+cheb_grid(N::Integer) = cospi.(interval.(BigFloat.(collect(0:N))) ./ exact(BigFloat(N)))
+
+"""Return the tensor-product grids on `[0,1]^2` used by exported coefficients."""
+function make_grids(N::Integer)
+    half = exact(BigFloat(0.5))
+    xarr = reverse(half .+ half .* cheb_grid(N))
+    return xarr, copy(xarr)
+end
+
+"""Evaluate an exported tensor-product Chebyshev series at `(x, y)` in `[0,1]^2`."""
+function evaluate_coeffs_at_point(coeffs::AbstractMatrix{<:Number}, x::Real, y::Real)
+    Tx = chebyshev_values(exact(2) * x - exact(1), size(coeffs, 1) - 1)
+    Ty = chebyshev_values(exact(1) - exact(2) * y, size(coeffs, 2) - 1)
+    T = promote_type(eltype(coeffs), eltype(Tx))
+    value = zero(T)
+
+    for j in axes(coeffs, 2)
+        inner = zero(T)
+        for i in axes(coeffs, 1)
+            inner += coeffs[i, j] * Tx[i]
+        end
+        value += inner * Ty[j]
+    end
+
+    return value
 end
 
 """
