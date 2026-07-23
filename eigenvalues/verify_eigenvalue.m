@@ -24,7 +24,9 @@ mass = infsup(sparse(data.i, data.j, data.lo, data.n, data.n), ...
 stiffness = hull(stiffness, stiffness');
 mass = hull(mass, mass');
 
-[lambda, index] = veigs(stiffness, mass, 2, 'sa');
+% Shift away from the constant mode and request only the nearby eigenvalue.
+verification_shift = 5;
+[lambda, index] = veigs(stiffness, mass, 1, verification_shift);
 target = find(index == 2);
 if numel(target) ~= 1
     error('VEIGS did not return a unique enclosure for generalized eigenvalue 2.');

@@ -7,7 +7,6 @@ function [lambda,ind_range] = veigs(A, B, varargin)
 % A and B must be symmetric (real or interval) matrices, and B must be positive definite.
 % If B is not positive definite, the program will fail to continue.
 % A and B can be in sparse matrix format.
-% The scheme for calculating approximate eigenvalues depends on the format of A and B.
 %
 % NumOfEigs is optional and specifies the minimum number of eigenvalues to be returned.
 % Default value is 1.
@@ -19,7 +18,7 @@ function [lambda,ind_range] = veigs(A, B, varargin)
 %   SIGMA = 'la' or 'largestreal' : largest eigenvalue
 %   SIGMA = 'sm' or 'smallestabs': eigenvalue of smallest magnitude
 %   SIGMA = 'lm' or 'largestabs' : eigenvalue of largest magnitude
-% If SIGMA is a real scalar, VEIGS(A,B,SIGMA) finds the bound for eigenvalue(s) near SIGMA.
+% If SIGMA is a real scalar, VEIGS(A,B,NumOfEigs,SIGMA) finds bounds near SIGMA.
 %
 % ----------------------- Output -----------------------------------------
 %
@@ -28,9 +27,8 @@ function [lambda,ind_range] = veigs(A, B, varargin)
 %
 % [lambda, ind] = VEIGS(A,B) returns both eigenvalue bounds and corresponding index/indices.
 %
-% If either A or B is in sparse matrix format, VEIGS first calls EIGS to compute approximate
-% eigenvalues.  If EIGS fails or A and B are full matrices, the code turns to EIG,
-% which may take longer for large matrices.
+% VEIGS calls EIGS to compute approximate eigenvalues. If EIGS does not
+% converge, VEIGS errors rather than materialising dense matrices.
 %----------------------- Dependencies -------------------------------------
 %   INTLAB (required):
 %     - intval, mid, inf, sup, hull, isspd, midrad, mag, in0, getround/setround
@@ -126,8 +124,8 @@ if ischar(SIGMA) || isstring(SIGMA)
     if any(strcmpi(char(SIGMA), {'smallestabs','largestabs','largestreal','smallestreal'}))
         [V,D,F] = eigs(mid(A), mid(B), EigNum, char(SIGMA));
         if F ~= 0
-            warning('EIGS failed to converge; switching to full EIG for approximate eigenvalues.');
-            [V,D] = eig(full(mid(A)), full(mid(B)));
+            error('VEIGS:EigsNonconvergence', ...
+                'EIGS failed to converge (flag %d); refusing dense EIG fallback.', F);
         end
         [eig_list,p] = sort(diag(D));
     else
@@ -147,8 +145,8 @@ if ischar(SIGMA) || isstring(SIGMA)
 else
     [V,D,F] = eigs(mid(A), mid(B), EigNum, SIGMA);
     if F ~= 0
-        warning('EIGS failed to converge; switching to full EIG.');
-        [V,D] = eig(full(mid(A)), full(mid(B)));
+        error('VEIGS:EigsNonconvergence', ...
+            'EIGS failed to converge (flag %d); refusing dense EIG fallback.', F);
     end
     [eig_list,p] = sort(diag(D));
     [~,ind] = min(abs(eig_list - SIGMA));

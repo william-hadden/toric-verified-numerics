@@ -3,7 +3,6 @@ using IntervalArithmetic
 # Select the BigFloat-compatible interval matrix product without per-call fallback.
 IntervalArithmetic.configure(; matmul = :slow)
 
-include(joinpath(@__DIR__, "triangulation.jl"))
 include(joinpath(@__DIR__, "inverse_metric_bounds.jl"))
 
 """Return twice the signed physical area using interval-enclosed coordinates."""
@@ -53,8 +52,8 @@ Return the canonical mesh edges associated with the local CR basis functions.
 Entry `i` joins the two vertices other than `tri[i]`, matching gradient row `i`.
 """
 function cr_basis_edges(tri)
-    edges = triangle_edges(tri)
-    return (edges[2], edges[3], edges[1])
+    a, b, c = tri
+    return (minmax(b, c), minmax(c, a), minmax(a, b))
 end
 
 """Build the global edge degrees of freedom for a triangle list."""
@@ -215,23 +214,16 @@ function assemble_matrices(mesh, certificates)
     return (; matrix_size = maximum(quotient), mass, stiffness, liu_constant)
 end
 
-"""Apply Liu's monotone FEM-to-smooth comparison to a verified endpoint."""
-function liu_lower_bound(lambda_fem_lower, liu_constant_upper)
-    lambda = interval(BigFloat(lambda_fem_lower))
-    constant = interval(BigFloat(liu_constant_upper))
-    denominator = interval(BigFloat(1)) + constant^2 * lambda
-    inf(denominator) > 0 || error("Liu's comparison denominator is not positive")
-    return inf(lambda / denominator)
-end
-
 """Write named numeric arrays in the MATLAB version-4 binary format."""
 function write_mat4(path, entries)
     open(path, "w") do io
         for (name, value) in entries
             array = if value isa Number
                 reshape([Float64(value)], 1, 1)
-            else
+            elseif value isa AbstractVector
                 reshape(Float64.(value), :, 1)
+            else
+                Float64.(value)
             end
             write(io, Int32(0), Int32(size(array, 1)), Int32(size(array, 2)))
             write(io, Int32(0), Int32(length(name) + 1))

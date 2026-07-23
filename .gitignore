@@ -1,4 +1,8 @@
 *.vscode
+.DS_Store
 Manifest.toml
 data/happrox/coeffs-rational.csv.zip
 data/happrox/coeffs-rational.csv
+eigenvalues/INTLAB/Intlab_V14.1/
+eigenvalues/mass_matrix.mat
+eigenvalues/stiff_matrix.mat
