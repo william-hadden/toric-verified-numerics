@@ -160,7 +160,13 @@ function certify_element(oracle, mesh, tri, degree, terms, bisection_steps, qual
     end
 end
 
-"""Construct the certified comparison matrix on every mesh element."""
+"""
+Certify every element of `mesh` with `oracle`.
+
+`degree`, `terms`, and `bisection_steps` control the inverse-metric enclosure;
+`quality_target` bounds each local Liu constant, and `progress_interval` is
+the threaded batch size. Return one certificate per triangle in mesh order.
+"""
 function certify_elements(
     oracle,
     mesh,
@@ -172,21 +178,23 @@ function certify_elements(
 )
     target = inf(interval(BigFloat(numerator(quality_target))) /
                  interval(BigFloat(denominator(quality_target))))
-    certificates = Vector{Any}(undef, length(mesh.triangles))
-    for index in eachindex(mesh.triangles)
-        certificates[index] = certify_element(
-            oracle,
-            mesh,
-            mesh.triangles[index],
-            degree,
-            terms,
-            bisection_steps,
-            target,
-        )
-        if index % progress_interval == 0 || index == length(mesh.triangles)
-            println("certified $index / $(length(mesh.triangles)) elements")
-            flush(stdout)
+    triangle_count = length(mesh.triangles)
+    certificates = Vector{Any}(undef, triangle_count)
+    for first_index in 1:progress_interval:triangle_count
+        last_index = min(first_index + progress_interval - 1, triangle_count)
+        Threads.@threads for index in first_index:last_index
+            certificates[index] = certify_element(
+                oracle,
+                mesh,
+                mesh.triangles[index],
+                degree,
+                terms,
+                bisection_steps,
+                target,
+            )
         end
+        println("certified $last_index / $triangle_count elements")
+        flush(stdout)
     end
     return certificates
 end
