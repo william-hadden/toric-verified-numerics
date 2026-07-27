@@ -255,13 +255,15 @@ function check_fixed_point(; path::AbstractString = VERIFIED_BOUNDS_PATH)
     condition2_holds = sup(condition2_lhs) < 1
 
     if condition1_holds && condition2_holds
+        decimal_unit = interval(BigFloat(10))^-SERIALIZED_BOUND_DECIMAL_DIGITS
+        write_bound_entry("fixed_point_bounds", "contraction_radius_upper_bound", r + decimal_unit; path)
         println(
             "For alpha1=$(alpha_1), alpha2=$(alpha_2), alpha3=$(alpha_3), r=$(r) " *
             "the conditions alpha2*alpha1 + alpha2*alpha3*r^2 <= r and " *
             "2*alpha2*alpha3*r < 1 are satisfied"
         )
     else
-        println(
+        error(
             "For alpha1=$(alpha_1), alpha2=$(alpha_2), alpha3=$(alpha_3), r=$(r) " *
             "the fixed-point conditions are not satisfied. " *
             "Condition 1 lhs=$(condition1_lhs), rhs=$(r), holds=$(condition1_holds). " *
