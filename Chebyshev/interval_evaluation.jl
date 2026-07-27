@@ -12,7 +12,7 @@ function chebyshev_values(x, N::Integer)
     end
 
     for k in 2:N
-        T[k + 1] = 2 * x * T[k] - T[k - 1]
+        T[k + 1] = exact(2) * x * T[k] - T[k - 1]
     end
 
     return T
@@ -82,8 +82,10 @@ end
 function affine_box_to_unit(box)
     l = inf(box)
     r = sup(box)
-    a = (l + r) / 2
-    b = (r - l) / 2
+    li = interval(l)
+    ri = interval(r)
+    a = (li + ri) / exact(2)
+    b = (ri - li) / exact(2)
     return interval(a), interval(b)
 end
 
@@ -107,7 +109,7 @@ function cheb_shifted_power_coeffs(n::Integer, a, b)
             xTk[i + 1] += b * Tk[i]
         end
 
-        Tkp1 = 2 .* xTk
+        Tkp1 = exact(2) .* xTk
 
         for i in eachindex(Tkm1)
             Tkp1[i] -= Tkm1[i]

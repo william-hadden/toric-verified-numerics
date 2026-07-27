@@ -508,7 +508,9 @@ function cheb_mul2(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number}; met
     end
 end
 
-"""Multiply intervalized Chebyshev series with the rigorous DCT method."""
+"""
+Multiply intervalized Chebyshev series with the rigorous DCT method.
+"""
 function cheb_mul_fast(A::AbstractMatrix{<:Number}, B::AbstractMatrix{<:Number})
     return cheb_mul2(intervalize_coefficients(A), intervalize_coefficients(B); method = :interval_dct)
 end
