@@ -138,8 +138,8 @@ function local_liu_constant(diameter_upper, alpha_lower)
     return upper
 end
 
-"""Certify one element, increasing the minimum cover depth until quality holds."""
-function certify_element(oracle, mesh, tri, degree, terms, bisection_steps, quality_threshold)
+"""Certify one element until its Liu constant is at most `liu_constant_target`."""
+function certify_element(oracle, mesh, tri, degree, terms, bisection_steps, liu_constant_target)
     diameter = triangle_diameter_upper(mesh.nodes, tri)
     min_depth = 0
     while true
@@ -153,7 +153,7 @@ function certify_element(oracle, mesh, tri, degree, terms, bisection_steps, qual
             bisection_steps,
         )
         liu_constant = local_liu_constant(diameter, bound.alpha)
-        if liu_constant <= quality_threshold
+        if liu_constant <= liu_constant_target
             return (; B = bound.B, alpha = bound.alpha, liu_constant)
         end
         min_depth += 1
@@ -164,8 +164,8 @@ end
 Certify every element of `mesh` with `oracle`.
 
 `degree`, `terms`, and `bisection_steps` control the inverse-metric enclosure;
-`quality_target` bounds each local Liu constant, and `progress_interval` is
-the threaded batch size. Return one certificate per triangle in mesh order.
+`liu_constant_target` bounds each local Liu constant, and `progress_interval`
+is the threaded batch size. Return one certificate per triangle in mesh order.
 """
 function certify_elements(
     oracle,
@@ -173,11 +173,10 @@ function certify_elements(
     degree,
     terms,
     bisection_steps,
-    quality_target,
+    liu_constant_target,
     progress_interval,
 )
-    target = inf(interval(BigFloat(numerator(quality_target))) /
-                 interval(BigFloat(denominator(quality_target))))
+    liu_constant_threshold = inf(interval(BigFloat, liu_constant_target))
     triangle_count = length(mesh.triangles)
     certificates = Vector{Any}(undef, triangle_count)
     for first_index in 1:progress_interval:triangle_count
@@ -190,7 +189,7 @@ function certify_elements(
                 degree,
                 terms,
                 bisection_steps,
-                target,
+                liu_constant_threshold,
             )
         end
         println("certified $last_index / $triangle_count elements")

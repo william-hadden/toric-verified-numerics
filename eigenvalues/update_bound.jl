@@ -1,6 +1,5 @@
 using IntervalArithmetic
 using JSON
-using Printf
 
 isdefined(@__MODULE__, :parse_bound_value) ||
     include(joinpath(@__DIR__, "..", "utils", "io.jl"))
@@ -43,10 +42,15 @@ function liu_lower_bound(lambda_fem_lower, comparison_constant)
 end
 
 """
-Apply the inset-to-compact comparison to `lambda_inset_lower`.
+Assume L is a lower bound for the LHS in equation `deltaenergy` from the paper,
+i.e. L <= lambda_1/(1 - sqrt(7 delta/3)(3 lambda_1/(2 mu) + 1) -
+sqrt(7 delta)/(2 pi (3 - 7 delta))). Setting a=sqrt(7 delta/3),
+d=sqrt(7 delta)/(2 pi (3 - 7 delta)), c=1-a-d, and b=3a/(2 mu), we get
+L <= lambda_1/(c - b lambda_1). Rearranging gives
+lambda_1 >= L c/(1 + L b).
 
-`delta` is the inset interval and `ricci_lower_bound` is its serialized Ricci
-lower bound. Return a rigorous compact-manifold eigenvalue lower bound.
+The arguments `lambda_inset_lower`, `delta`, and `ricci_lower_bound` are L,
+delta, and mu, respectively. Return a rigorous lower bound for lambda_1.
 """
 function compact_lower_bound(lambda_inset_lower, delta, ricci_lower_bound)
     lambda = interval(BigFloat(lambda_inset_lower))
@@ -69,52 +73,16 @@ function compact_lower_bound(lambda_inset_lower, delta, ricci_lower_bound)
     return inf(lambda * c / denominator)
 end
 
-"""
-Serialize `value` with `digits` places after the decimal point.
-
-Return a decimal string whose exact value is at most `value`.
-"""
-function directed_lower_decimal(value, digits)
-    target = BigFloat(value)
-    isfinite(target) || error("Cannot serialize a non-finite lower bound")
-    candidate = prevfloat(target)
-    while true
-        text = @sprintf("%.*f", digits, candidate)
-        parsed_upper = setrounding(BigFloat, RoundUp) do
-            parse(BigFloat, text)
-        end
-        parsed_upper <= target && return text
-        candidate = prevfloat(candidate)
-    end
-end
-
-"""
-Write the two eigenvalue lower bounds into `bounds` at JSON `path`.
-
-Both bounds are rounded downward to `digits` places. Return nothing.
-"""
-function write_eigenvalue_bounds(path, bounds, inset_lower, compact_lower, digits)
-    bounds["lambda_1_delta_lower_bound"] =
-        directed_lower_decimal(inset_lower, digits)
-    bounds["lambda_1_lower_bound"] =
-        directed_lower_decimal(compact_lower, digits)
-    open(path, "w") do io
-        JSON.print(io, bounds, 4)
-        println(io)
-    end
-end
-
 """Read the fixed FEM certificate and update the two JSON eigenvalue bounds."""
 function run_bound_update()
     setprecision(BigFloat, 256) do
-        decimal_digits = 77
         bounds_path = normpath(
             joinpath(@__DIR__, "..", "data", "verified_bounds.json"),
         )
         bounds = JSON.parsefile(bounds_path)
         delta = parse_rational_interval(bounds["delta_inset"])
         comparison_constant =
-            parse_bound_value(bounds["Liu_FEM_comparison_constant"])
+            parse_rational_interval(bounds["Liu_FEM_comparison_constant"])
         result_path = joinpath(@__DIR__, "verified_eigenvalue.mat")
         lambda_fem_lower, lambda_fem_upper =
             verified_fem_endpoints(result_path)
@@ -125,13 +93,17 @@ function run_bound_update()
             delta,
             bounds["curvature_bounds"]["ricci_lower_bound"],
         )
-        write_eigenvalue_bounds(
-            bounds_path,
-            bounds,
-            lambda_inset_lower,
-            lambda_compact_lower,
-            decimal_digits,
+        decimal_unit = interval(BigFloat(10))^-SERIALIZED_BOUND_DECIMAL_DIGITS
+        bounds["lambda_1_delta_lower_bound"] = serialize_bound_value(
+            inf(interval(lambda_inset_lower) - decimal_unit),
         )
+        bounds["lambda_1_lower_bound"] = serialize_bound_value(
+            inf(interval(lambda_compact_lower) - decimal_unit),
+        )
+        open(bounds_path, "w") do io
+            JSON.print(io, bounds, 4)
+            println(io)
+        end
         println("FEM eigenvalue enclosure: [$lambda_fem_lower, $lambda_fem_upper]")
         println("smooth inset lower bound: $lambda_inset_lower")
         println("compact-manifold lower bound: $lambda_compact_lower")
