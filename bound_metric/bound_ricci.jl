@@ -6,7 +6,7 @@ global_logger(NullLogger())
 include(joinpath(@__DIR__, "..", "bound_residual", "util", "io.jl"))
 include(joinpath(@__DIR__, "..", "bound_residual", "util", "chebyshev_algebra.jl"))
 include(joinpath(@__DIR__, "..", "bound_residual", "util", "problem.jl"))
-include(joinpath(@__DIR__, "util", "io.jl"))
+# include(joinpath(@__DIR__, "util", "io.jl"))
 include(joinpath(@__DIR__, "util", "progress.jl"))
 include(joinpath(@__DIR__, "util", "interval_helpers.jl"))
 include(joinpath(@__DIR__, "util", "inverse_coefficients.jl"))
@@ -24,8 +24,8 @@ function bound_ricci_subdivision_local(
     pdeg::Integer,
     num_subdivisions::Integer;
 )
-    step1_progress = start_progress("Step 1: Load u0", 1)
-    step1 = load_metric_coeffs_csv(coeffs_path)
+    step1_progress = start_progress("Step 1: Load u0", filesize(coeffs_path))
+    step1 = load_rational_coeffs_csv(coeffs_path; progress = step1_progress)
     finish_progress!(step1_progress)
     println("Step 1: Load u0 ... ok")
 
@@ -78,8 +78,8 @@ end
 function bound_ricci_from_below(coeffs_path::AbstractString,
     pdeg::Integer,
     num_subdivisions::Integer;)
-    step1_progress = start_progress("Step 1: Load u0", 1)
-    step1 = load_metric_coeffs_csv(coeffs_path)
+    step1_progress = start_progress("Step 1: Load u0", filesize(coeffs_path))
+    step1 = load_rational_coeffs_csv(coeffs_path; progress = step1_progress)
     finish_progress!(step1_progress)
     println("Step 1: Load u0 ... ok")
 
@@ -126,9 +126,9 @@ end
 
 function main()
     setprecision(BigFloat, 100)
-    # bound_ricci_subdivision_local(METRIC_U0_PATH, 10, 4)
-    # bound_ricci_from_below(METRIC_U0_PATH, 10, 4)
-    bound_ricci_from_below(METRIC_U0_PATH, 30, 20)
+    # bound_ricci_subdivision_local(U0_PATH, 10, 4)
+    # bound_ricci_from_below(U0_PATH, 10, 4)
+    bound_ricci_from_below(U0_PATH, 30, 20)
 end
 if abspath(PROGRAM_FILE) == @__FILE__
     main()

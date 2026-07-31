@@ -6,7 +6,7 @@ global_logger(NullLogger())
 include(joinpath(@__DIR__, "..", "bound_residual", "util", "io.jl"))
 include(joinpath(@__DIR__, "..", "bound_residual", "util", "chebyshev_algebra.jl"))
 include(joinpath(@__DIR__, "..", "bound_residual", "util", "problem.jl"))
-include(joinpath(@__DIR__, "util", "io.jl"))
+# include(joinpath(@__DIR__, "util", "io.jl"))
 include(joinpath(@__DIR__, "util", "progress.jl"))
 include(joinpath(@__DIR__, "util", "interval_helpers.jl"))
 include(joinpath(@__DIR__, "util", "inverse_coefficients.jl"))
@@ -24,8 +24,8 @@ function bound_riem_subdivision_local(
     pdeg::Integer,
     num_subdivisions::Integer;
 )
-    step1_progress = start_progress("Step 1: Load h0", 1)
-    step1 = load_metric_coeffs_csv(coeffs_path)
+    step1_progress = start_progress("Step 1: Load h0", filesize(coeffs_path))
+    step1 = load_rational_coeffs_csv(coeffs_path; progress = step1_progress)
     finish_progress!(step1_progress)
     println("Step 1: Load h0 ... ok")
 
@@ -83,8 +83,8 @@ function bound_cov_riem_subdivision_local(
     pdeg::Integer,
     num_subdivisions::Integer;
 )
-    step1_progress = start_progress("Step 1: Load h0", 1)
-    step1 = load_metric_coeffs_csv(coeffs_path)
+    step1_progress = start_progress("Step 1: Load h0", filesize(coeffs_path))
+    step1 = load_rational_coeffs_csv(coeffs_path; progress = step1_progress)
     finish_progress!(step1_progress)
     println("Step 1: Load h0 ... ok")
 
@@ -142,8 +142,8 @@ function bound_cov_cov_riem_subdivision_local(
     pdeg::Integer,
     num_subdivisions::Integer;
 )
-    step1_progress = start_progress("Step 1: Load h0", 1)
-    step1 = load_metric_coeffs_csv(coeffs_path)
+    step1_progress = start_progress("Step 1: Load h0", filesize(coeffs_path))
+    step1 = load_rational_coeffs_csv(coeffs_path; progress = step1_progress)
     finish_progress!(step1_progress)
     println("Step 1: Load h0 ... ok")
 
@@ -195,7 +195,7 @@ end
 
 function main()
     setprecision(BigFloat, 100)
-    bound_cov_cov_riem_subdivision_local(METRIC_U0_PATH, 10, 4)
+    bound_cov_cov_riem_subdivision_local(U0_PATH, 10, 4)
 end
 if abspath(PROGRAM_FILE) == @__FILE__
     main()

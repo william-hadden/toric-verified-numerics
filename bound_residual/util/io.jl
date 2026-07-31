@@ -20,12 +20,16 @@ end
 """
 Load the rational coefficient matrix from the canonical CSV export.
 """
-function load_rational_coeffs_csv(path::AbstractString)::Matrix{Interval{BigFloat}}
+function load_rational_coeffs_csv(
+    path::AbstractString;
+    progress = nothing,
+)::Matrix{Interval{BigFloat}}
     rows = Vector{Vector{Interval{BigFloat}}}()
 
     open(path, "r") do io
         for line in eachline(io)
             push!(rows, parse_rational_interval.(split(line, ',')))
+            progress === nothing || advance_progress!(progress, ncodeunits(line))
         end
     end
 

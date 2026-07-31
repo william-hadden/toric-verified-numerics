@@ -2,3 +2,4 @@
 Manifest.toml
 data/happrox/coeffs-rational.csv.zip
 data/happrox/coeffs-rational.csv
+bound_hsc/checkpoints/*.jls

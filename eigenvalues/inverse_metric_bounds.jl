@@ -22,7 +22,7 @@ end
 """Load the approximate metric and truncate its Hessian at `coefficient_degree`."""
 function InverseMetricOracle(coefficient_degree::Integer)
     coefficient_degree >= 0 || throw(ArgumentError("coefficient_degree must be nonnegative"))
-    coefficients = load_metric_coeffs_csv(METRIC_U0_PATH)
+    coefficients = load_rational_coeffs_csv(U0_PATH)
     derivatives = compute_second_derivatives(coefficients)
     return InverseMetricOracle(
         truncate_coeffs_with_tail(derivatives.uxx, coefficient_degree),
