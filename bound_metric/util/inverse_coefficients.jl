@@ -85,7 +85,6 @@ function factored_canonical_metric_coeffs(; progress = nothing)
     return (; lprod, lprod_v11, lprod_v12, lprod_v22, B)
 end
 
-# worker
 function build_inverse_metric_coeffs(derivatives; progress = nothing)
     h11 = intervalize_coefficients(derivatives.uxx)
     h12 = intervalize_coefficients(derivatives.uxy)

@@ -470,7 +470,7 @@ function compute_inverse_derivative_numerator_pack(
     progress = nothing,
 )
     k >= 0 || error("Maximum derivative order k must be >= 0")
-    pdeg > 0 || error("Truncated inverse derivative numerator pack requires pdeg > 0")
+    pdeg >= 0 || error("Inverse derivative numerator pack requires pdeg >= 0")
 
     A = Dict(
         (1, 1) => inverse_coeffs.A11,
@@ -665,10 +665,14 @@ denominator is `D^12`. All contractions for these norms are done with
 function compute_inverse_derivative_numerator_components_truncated_coeff_space(
     inverse_coeffs;
     k::Integer = 3,
-    pdeg::Integer,
+    pdeg::Union{Nothing,Integer} = nothing,
     progress = nothing,
 )
-    pdeg > 0 || error("Truncated inverse derivative construction requires pdeg > 0")
+    if isnothing(pdeg)
+        pdeg = maximum(size(inverse_coeffs.D))  -1
+    end
+    
+    pdeg >= 0 || error("Inverse derivative construction requires pdeg >= 0")
 
     pack = compute_inverse_derivative_numerator_pack(
         inverse_coeffs;

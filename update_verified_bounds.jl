@@ -138,7 +138,7 @@ function update_verified_bounds_json(metric_inverse, curvature_bounds; path::Abs
 end
 
 function run_verified_bounds_pipeline(;
-    coeffs_path::AbstractString = METRIC_U0_PATH,
+    coeffs_path::AbstractString = U0_PATH,
     inverse_pdeg::Integer = INVERSE_PDEG,
     inverse_subdivisions::Integer = INVERSE_SUBDIVISIONS,
     ricci_pdeg::Integer = RICCI_PDEG,
@@ -153,8 +153,9 @@ function run_verified_bounds_pipeline(;
     nabla2_riemann_subdivisions::Integer = NABLA2_RIEMANN_SUBDIVISIONS,
     output_path::AbstractString = VERIFIED_BOUNDS_PATH,
 )
-    println("Loading metric coefficients ...")
-    step1 = load_metric_coeffs_csv(coeffs_path)
+    load_progress = start_progress("Loading metric coefficients", filesize(coeffs_path))
+    step1 = load_rational_coeffs_csv(coeffs_path; progress = load_progress)
+    finish_progress!(load_progress)
 
     println("Computing second derivatives ...")
     step2 = compute_second_derivatives(step1)

@@ -49,3 +49,11 @@ function finish_progress!(progress::Union{TextProgress, Nothing})
     println()
     return nothing
 end
+
+function progress_message!(progress::Union{TextProgress, Nothing}, message::AbstractString)
+    progress === nothing && return nothing
+    println()
+    println(message)
+    render_progress(progress)
+    return nothing
+end
