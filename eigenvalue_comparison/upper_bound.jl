@@ -13,12 +13,13 @@ const PDEG = 20
 const N = 256
 
 """
-Enclose the Rayleigh numerator on the coefficient square `[0,1]^2`.
+Enclose the Rayleigh numerator on the square `[0,1]^2`.
 
 The square coordinates are `(x, s)`, with `s = -y` relative to the physical
-negative-y sector. It is the union of two reflected fundamental sectors.
-Both the metric and the test function are invariant under that reflection, so
-this square has the same Rayleigh quotient as the full moment hexagon.
+y-coordinate. It is the union of two adjacent symmetry-related triangular
+sectors. Both the metric and the test function are invariant under the
+reflection relating them, so this square has the same Rayleigh quotient as the
+full moment hexagon.
 
 The centered D6-invariant test function and its gradient are
 
@@ -27,31 +28,30 @@ The centered D6-invariant test function and its gradient are
 
 Its exact squared L2 norm on the square is `7/30 - (5/12)^2 = 43/720`.
 
-Each dyadic grid cell is enclosed by interval boxes. The inverse metric and
-energy density are enclosed on that box and multiplied by its exact area. No
+Each grid cell is enclosed by interval boxes. The inverse metric and
+|grad f|^2 are enclosed on that box and multiplied by its exact area. No
 sign condition is imposed on the energy enclosure.
 """
 function enclose_rayleigh_numerator(inverse_coefficients)
-    one = interval(BigFloat, 1)
-    two = interval(BigFloat, 2)
     cell_area = interval(BigFloat, 1 // N^2)
     boxes = subdivide_minus_one_one(N)
     numerator = interval(BigFloat, 0)
 
     for xcheb in boxes, scheb in boxes
-        xbox = (xcheb + one) / two
-        sbox = (one - scheb) / two
+        # The Chebyshev coordinates are xcheb = 2x - 1 and scheb = 1 - 2s.
+        xbox = (xcheb + exact(1)) / exact(2)
+        sbox = (exact(1) - scheb) / exact(2)
         metric = inverse_metric_box_bounds_with_tail(
             inverse_coefficients,
             xcheb,
             scheb,
         )
 
-        qx = two * xbox - sbox
-        qs = -xbox + two * sbox
+        qx = exact(2) * xbox - sbox
+        qs = -xbox + exact(2) * sbox
         energy =
             metric.u11_box * qx^2 +
-            two * metric.u12_box * qx * qs +
+            exact(2) * metric.u12_box * qx * qs +
             metric.u22_box * qs^2
         numerator += cell_area * energy
     end

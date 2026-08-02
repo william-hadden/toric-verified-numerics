@@ -14,10 +14,9 @@ setprecision(BigFloat, 256) do
         epsilon
 
     C1_epsilon = interval(sup(C1_epsilon))
-    one = interval(BigFloat(1))
 
-    lower_factor = (one - C1_epsilon)^2 / (one + C1_epsilon)^3
-    upper_factor = (one + C1_epsilon)^2 / (one - C1_epsilon)^3
+    lower_factor = (exact(1) - C1_epsilon)^2 / (exact(1) + C1_epsilon)^3
+    upper_factor = (exact(1) + C1_epsilon)^2 / (exact(1) - C1_epsilon)^3
     lower_bound = lower_factor * read_bound("lambda_1_lower_bound")
     upper_bound = upper_factor * read_bound("lambda_1_upper_bound")
 
