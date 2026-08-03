@@ -74,15 +74,42 @@ end
             beam_width = 20,
             invalid_keep = 5,
         )
-        first_dir = hsc_run_checkpoint_dir(parameters; checkpoint_root)
-        second_dir = hsc_run_checkpoint_dir(parameters; checkpoint_root)
+        started_at = DateTime(2026, 8, 3, 15, 4, 5)
+        first_dir = hsc_run_checkpoint_dir(parameters; checkpoint_root, started_at)
+        second_dir = hsc_run_checkpoint_dir(parameters; checkpoint_root, started_at)
         readme = read(joinpath(first_dir, "README.txt"), String)
 
-        @test first_dir == second_dir
+        @test first_dir != second_dir
         @test dirname(first_dir) == checkpoint_root
+        @test occursin(r"_\d{8}-\d{6}$", first_dir)
+        @test occursin(r"_\d{8}-\d{6}_2$", second_dir)
+        @test occursin("started_at = ", readme)
         @test occursin("pdeg = 10", readme)
         @test occursin("grid = 12", readme)
         @test occursin("maxdepth = 6", readme)
+
+        context = (coefficient_sha256 = "abc123",)
+        step_parameters = (operation = :find_compatible_U_V,)
+        save_hsc_checkpoint(
+            6,
+            :older;
+            context,
+            parameters = step_parameters,
+            checkpoint_dir = first_dir,
+        )
+        save_hsc_checkpoint(
+            6,
+            :newer;
+            context,
+            parameters = step_parameters,
+            checkpoint_dir = second_dir,
+        )
+        @test load_hsc_checkpoint(
+            6;
+            expected_context = context,
+            expected_parameters = step_parameters,
+            checkpoint_root,
+        ) == :newer
     end
 end
 
