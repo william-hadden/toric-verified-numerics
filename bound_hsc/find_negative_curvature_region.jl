@@ -3,31 +3,28 @@ using Logging
 
 global_logger(NullLogger())
 
-include(joinpath(@__DIR__, "..", "bound_residual", "util", "io.jl"))
-include(joinpath(@__DIR__, "..", "bound_residual", "util", "chebyshev_algebra.jl"))
-include(joinpath(@__DIR__, "..", "bound_residual", "util", "problem.jl"))
-include(joinpath(@__DIR__, "..", "bound_metric", "util", "progress.jl"))
-include(joinpath(@__DIR__, "..", "bound_metric", "util", "interval_helpers.jl"))
+include(joinpath(@__DIR__, "..", "apply_fixed_point", "apply_fixed_point.jl"))
+include(joinpath(@__DIR__, "..", "utils", "load_common.jl"))
 include(joinpath(@__DIR__, "..", "bound_metric", "util", "inverse_coefficients.jl"))
 include(joinpath(@__DIR__, "..", "bound_metric","util", "inverse_bounds.jl"))
 include(joinpath(@__DIR__, "..", "bound_metric", "util", "inverse_truncation.jl"))
-include(joinpath(@__DIR__, "..", "bound_metric", "util", "chebyshev_interval_evaluation.jl"))
 include(joinpath(@__DIR__, "..", "bound_metric", "util", "inverse_subdivision_bounds.jl"))
 include(joinpath(@__DIR__, "..", "bound_metric", "util", "curvature_bounds.jl"))
 include(joinpath(@__DIR__, "checkpoints.jl"))
 include(joinpath(@__DIR__, "util.jl"))
 include(joinpath(@__DIR__, "arithmetic_helpers.jl"))
 
-function prove_proposition_5_6(
+
+
+function find_U_V_proposition_negative_hsc_at_point(
     coeffs_path::AbstractString;
     eta,
     rho,
     pdeg::Integer = 30,
     domain::PolytopeBox = PolytopeBox(0, 1, 0, 1),
 )
-    step1_progress = start_progress("Step 1: Load u0", filesize(coeffs_path))
-    step1 = load_rational_coeffs_csv(coeffs_path; progress = step1_progress)
-    finish_progress!(step1_progress)
+    println("Step 1: Load u0")
+    step1 = load_rational_coeffs_csv(coeffs_path)
     println("Step 1: Load u0 ... ok")
 
     checkpoint_context = hsc_checkpoint_context(coeffs_path)
@@ -321,18 +318,32 @@ function prove_proposition_5_6(
     end
 end
 
-function main()
-    # eta = exact(1) / exact(1000000000)
-    # rho = exact(1) / exact(1000000000)
-    eta = 0
-    rho=0
-    setprecision(BigFloat, 200) 
-    prove_proposition_5_6(U0_PATH; eta, rho)
-end
-# if abspath(PROGRAM_FILE) == "c:\\Users\\willi\\.vscode\\extensions\\julialang.language-julia-1.219.2\\scripts\\debugger\\run_debugger.jl"
-#     Base.invokelatest(main)
-# end
+"""
+can use lemma 5.1 and lemma 5.3 to set these 
+"""
+function set_eta_rho()
+    epsilon = read_bound("fixed_point_bounds")["contraction_radius_upper_bound"] 
 
+    const_emb_C1, const_emb_C2, const_emb_C3, const_emb_C4 = get_sobolev_multiplication_constants()
+    C_1 = const_emb_C4 * const_emb_C3 * const_emb_C2 * const_emb_C1
+    eta = C_1 * epsilon
+
+    eta < 1 ||
+    throw(DomainError(C_1 * epsilon, "C_1 * epsilon must be less than 1"))
+
+    rho = epsilon/(interval(1)-C_1*epsilon) +  (const_emb_C4^2*epsilon^2)/(interval(1)-C_1*epsilon)^2
+
+    return eta, rho
+end
+
+function main()
+    setprecision(BigFloat, 200) 
+    eta, rho = set_eta_rho()
+    println("Find valid U,V with eta: $eta, rho: $rho")
+    find_U_V_proposition_negative_hsc_at_point(U0_PATH; eta, rho)
+end
+
+# "c:\\Users\\willi\\.vscode\\extensions\\julialang.language-julia-1.219.2\\scripts\\debugger\\run_debugger.jl"
 if abspath(PROGRAM_FILE) == @__FILE__
     Base.invokelatest(main)
 end
