@@ -89,7 +89,7 @@ function affine_box_to_unit(box)
     return interval(a), interval(b)
 end
 
-function cheb_shisfted_power_coeffs(n::Integer, a, b)
+function cheb_shifted_power_coeffs(n::Integer, a, b)
     T = Vector{Vector{typeof(a)}}(undef, n + 1)
 
     T[1] = [one(a)]

@@ -18,10 +18,8 @@ function bound_ricci_subdivision_local(
     pdeg::Integer,
     num_subdivisions::Integer;
 )
-    step1_progress = start_progress("Step 1: Load u0", filesize(coeffs_path))
-    step1 = load_rational_coeffs_csv(coeffs_path; progress = step1_progress)
-    finish_progress!(step1_progress)
-    println("Step 1: Load u0 ... ok")
+    println("Step 1: Load u0", filesize(coeffs_path))
+    step1 = load_rational_coeffs_csv(coeffs_path)
 
     step2_progress = start_progress("Step 2: Compute second derivatives", 1)
     step2 = compute_second_derivatives(step1)
@@ -72,9 +70,8 @@ end
 function bound_ricci_from_below(coeffs_path::AbstractString,
     pdeg::Integer,
     num_subdivisions::Integer;)
-    step1_progress = start_progress("Step 1: Load u0", filesize(coeffs_path))
-    step1 = load_rational_coeffs_csv(coeffs_path; progress = step1_progress)
-    finish_progress!(step1_progress)
+    println("Step 1: Load u0")
+    step1 = load_rational_coeffs_csv(coeffs_path)
     println("Step 1: Load u0 ... ok")
 
     step2_progress = start_progress("Step 2: Compute second derivatives", 1)
