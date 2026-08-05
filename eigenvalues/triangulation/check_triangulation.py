@@ -80,6 +80,20 @@ def check_geometric_conformity(nodes, triangles):
         raise ValueError("triangles are not a conforming polygonal coverage")
 
 
+def check_radial_boundary_symmetry(nodes, triangles):
+    """Check exact reflection symmetry of the two radial boundary meshes."""
+    upper_vertices, lower_vertices = set(), set()
+    for triangle in triangles:
+        for vertex in triangle:
+            x, y = nodes[vertex]
+            if y == 0:
+                upper_vertices.add(x)
+            if x + y == 0:
+                lower_vertices.add(x)
+    if upper_vertices != lower_vertices:
+        raise ValueError("radial boundary meshes are not reflection-symmetric")
+
+
 def main():
     """Verify the hardcoded triangulation and print its dimensions."""
     path = Path(__file__).with_name("triangulation.mat")
@@ -87,6 +101,7 @@ def main():
     check_lattice_data(nodes, triangles, lattice_size)
     check_exact_areas(nodes, triangles, lattice_size)
     check_geometric_conformity(nodes, triangles)
+    check_radial_boundary_symmetry(nodes, triangles)
     print(f"verified {len(nodes)} nodes and {len(triangles)} triangles")
 
 
