@@ -220,7 +220,7 @@ function get_higher_order_constant(
     # From proposition:non-linear-estimate, using ||u||_{L2_3} <= ||u||_{L2_5} <= r.
     return const_multiplication_theorem *
         (
-            interval(BigFloat(1)) +
+            interval(BigFloat(1)) / interval(BigFloat(2)) +
             (interval(BigFloat(1)) + const_multiplication_theorem * epsilon) *
             exp(interval(BigFloat(2)) * const_multiplication_theorem * r)
         )
