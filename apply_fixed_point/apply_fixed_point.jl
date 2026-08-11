@@ -32,13 +32,18 @@ function get_sobolev_multiplication_constants(
         sqrt(mu / interval(BigFloat(3))) /
         (interval(BigFloat(2)) / interval(BigFloat(3)))
 
+    sobolev_gradient_factor =
+        sqrt(interval(BigFloat(3))) *
+        K_4_2 *
+        sqrt(sqrt(omega_4 / (V * mu^2)))
+
     const_emb_C1 = max(
-        K_4_2 * sqrt(sqrt(omega_4 / (V * mu^2))),
+        sobolev_gradient_factor,
         interval(BigFloat(1)) / sqrt(sqrt(V)),
     )
     const_emb_C2 = sqrt(sqrt(cbrt(V)))
     const_emb_C3 = max(
-        K_4_2 * sqrt(sqrt(omega_4 / (V * mu^2))) * interval(BigFloat(3)),
+        sobolev_gradient_factor * interval(BigFloat(3)),
         interval(BigFloat(1)) / sqrt(sqrt(V)),
     )
     const_emb_C4 = max(
