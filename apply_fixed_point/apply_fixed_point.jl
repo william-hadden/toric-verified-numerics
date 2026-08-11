@@ -56,19 +56,22 @@ function get_sobolev_multiplication_constants(
     )
 
     embedding_product = const_emb_C4 * const_emb_C3 * const_emb_C2 * const_emb_C1
+    # The manuscript uses the coarse embedding
+    # ||u||_C0 <= 4 C4 C3 C2 C1 ||u||_L2_3.
     const_sobolev_low_order_multiplication_M0 =
-        interval(BigFloat(2)) * embedding_product
+        interval(BigFloat(4)) * embedding_product
     const_sobolev_low_order_multiplication_M1 =
         const_sobolev_low_order_multiplication_M0 + const_emb_C1^2
     const_sobolev_low_order_multiplication_M2 =
         const_sobolev_low_order_multiplication_M0 +
         interval(BigFloat(4)) * const_emb_C1^2
 
+    # Coarse L2_3 multiplication constant from the manuscript's coefficient table.
     const_multiplication_theorem = max(
         max(
-            interval(BigFloat(4)) * embedding_product,
-            interval(BigFloat(2)) * embedding_product +
-            interval(BigFloat(3)) * const_emb_C1^2,
+            interval(BigFloat(8)) * embedding_product,
+            interval(BigFloat(4)) * embedding_product +
+            interval(BigFloat(4)) * const_emb_C1^2,
         ),
         interval(BigFloat(8)) * const_emb_C1^2,
     )
