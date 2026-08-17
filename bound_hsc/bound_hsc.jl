@@ -83,7 +83,8 @@ function prove_proposition_5_6(
         println("Step 2: Loaded checkpoint: $(hsc_checkpoint_path(2))")
     else
         step2_progress = start_progress("Step 2: Compute full second derivatives", 1)
-        step2 = compute_second_derivatives(step1)
+        # step2 = compute_second_derivatives(step1)
+        step2 = build_derivative_pack(step1)
         finish_progress!(step2_progress)
         step2_checkpoint = save_hsc_checkpoint(
             2,

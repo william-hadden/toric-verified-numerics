@@ -1,5 +1,8 @@
 const DEL_PEZZO_NORMALS = ((-1, 1), (0, 1), (1, 0), (1, -1), (0, -1), (-1, 0))
 
+"""
+Construct Chebyshev coefficients for the facets of the hexagon.
+"""
 function facet_series()
     half = interval_half()
 
@@ -37,6 +40,9 @@ product_except(series, excluded_a::Integer, excluded_b::Integer; progress = noth
         progress,
     )
 
+"""
+Construct nonsingular Chebyshev coefficient representation of the canonical metric.
+"""
 function factored_canonical_metric_coeffs(; progress = nothing)
     facets = facet_series()
 
@@ -85,6 +91,10 @@ function factored_canonical_metric_coeffs(; progress = nothing)
     return (; lprod, lprod_v11, lprod_v12, lprod_v22, B)
 end
 
+"""
+Construct Chebyshev coefficients for the inverse metric associated with the 
+symplectic potential u = u_P + h.
+"""
 function build_inverse_metric_coeffs(derivatives; progress = nothing)
     h11 = intervalize_coefficients(derivatives.uxx)
     h12 = intervalize_coefficients(derivatives.uxy)

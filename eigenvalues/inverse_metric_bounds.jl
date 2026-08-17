@@ -17,7 +17,8 @@ end
 function InverseMetricOracle(coefficient_degree::Integer)
     coefficient_degree >= 0 || throw(ArgumentError("coefficient_degree must be nonnegative"))
     coefficients = load_rational_coeffs_csv(U0_PATH)
-    derivatives = compute_second_derivatives(coefficients)
+    # derivatives = compute_second_derivatives(coefficients)
+    derivatives = build_derivative_pack(coefficients)
     return InverseMetricOracle(
         truncate_coeffs_with_tail(derivatives.uxx, coefficient_degree),
         truncate_coeffs_with_tail(derivatives.uxy, coefficient_degree),

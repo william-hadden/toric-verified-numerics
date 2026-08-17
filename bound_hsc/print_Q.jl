@@ -30,8 +30,10 @@ const SAMPLE_COORDINATES = (big(1) // 4, big(1) // 2, big(3) // 4)
 function build_hsc_derivatives(coeffs_path::AbstractString)
     println("Building curvature data from: ", coeffs_path)
     metric = load_rational_coeffs_csv(coeffs_path)
-    second_derivatives = compute_second_derivatives(metric)
-    inverse_metric = build_inverse_metric_coeffs(second_derivatives)
+    # second_derivatives = compute_second_derivatives(metric)
+    # inverse_metric = build_inverse_metric_coeffs(second_derivatives)
+    derivatives = build_derivative_pack(metric)
+    inverse_metric = build_inverse_metric_coeffs(derivatives)
     inverse_derivatives =
         compute_inverse_derivative_numerator_components_truncated_coeff_space(
             inverse_metric;

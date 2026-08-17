@@ -17,7 +17,9 @@ function cheb_diff_1d(coeffs::AbstractVector{<:Number})
     return deriv
 end
 
-"""Differentiate exported coefficients in the `x` variable on `[0,1]`."""
+"""
+Differentiate exported coefficients in the `x` variable on `[0,1]`.
+"""
 function differentiate_coeffs_x(coeffs::AbstractMatrix{<:Number})
     out = zeros(eltype(coeffs), size(coeffs))
     for j in axes(coeffs, 2)
@@ -26,7 +28,9 @@ function differentiate_coeffs_x(coeffs::AbstractMatrix{<:Number})
     return out
 end
 
-"""Differentiate exported coefficients in the `y` variable on `[0,1]`."""
+"""
+Differentiate exported coefficients in the `y` variable on `[0,1]`.
+"""
 function differentiate_coeffs_y(coeffs::AbstractMatrix{<:Number})
     out = zeros(eltype(coeffs), size(coeffs))
     for i in axes(coeffs, 1)
@@ -35,13 +39,17 @@ function differentiate_coeffs_y(coeffs::AbstractMatrix{<:Number})
     return out
 end
 
-"""Differentiate exported coefficients along dimension 1 (`x`) or 2 (`y`)."""
+"""
+Differentiate exported coefficients along dimension 1 (`x`) or 2 (`y`).
+"""
 partial_coeffs(coeffs::AbstractMatrix{<:Number}, dim::Integer) =
     dim == 1 ? differentiate_coeffs_x(coeffs) :
     dim == 2 ? differentiate_coeffs_y(coeffs) :
     throw(ArgumentError("Expected derivative dimension 1 or 2"))
 
-"""Assemble a series and its first and second derivative coefficient arrays."""
+"""
+Assemble a series and its first and second derivative coefficient arrays.
+"""
 function build_derivative_pack(coeffs::AbstractMatrix{<:Number})
     u0 = copy(coeffs)
     ux = differentiate_coeffs_x(u0)
@@ -52,7 +60,9 @@ function build_derivative_pack(coeffs::AbstractMatrix{<:Number})
     return (; u0, ux, uy, uxx, uyy, uxy)
 end
 
-"""Return only the second-derivative coefficient arrays of a Chebyshev series."""
+"""
+Return only the second-derivative coefficient arrays of a Chebyshev series.
+"""
 function compute_second_derivatives(coefficients::AbstractMatrix{<:Number})
     pack = build_derivative_pack(intervalize_coefficients(coefficients))
     return (; uxx = pack.uxx, uxy = pack.uxy, uyy = pack.uyy)

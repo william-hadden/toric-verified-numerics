@@ -8,6 +8,9 @@ mutable struct TextProgress
     finished_at::Union{UInt64, Nothing}
 end
 
+"""
+Create and display a new terminal progress bar.
+"""
 function start_progress(label::AbstractString, total::Integer)
     progress = TextProgress(String(label), Int(total), 0, 30, time_ns(), nothing)
     render_progress(progress)
@@ -17,14 +20,20 @@ end
 elapsed_seconds(progress::TextProgress) =
     ((progress.finished_at === nothing ? time_ns() : progress.finished_at) - progress.started_at) / 1.0e9
 
+"""
+Format an elapsed duration as seconds or minutes and seconds.
+"""
 function format_elapsed(seconds::Real)
     seconds < 60 && return "$(round(seconds; digits = 2))s"
-
     minutes = floor(Int, seconds / 60)
     remaining_seconds = seconds - 60 * minutes
     return "$(minutes)m $(round(remaining_seconds; digits = 2))s"
 end
 
+
+"""
+Redraw the progress bar on the current terminal line.
+"""
 function render_progress(progress::TextProgress)
     filled = progress.total == 0 ? progress.width : fld(progress.current * progress.width, progress.total)
     percent = progress.total == 0 ? 100 : fld(progress.current * 100, progress.total)
@@ -34,6 +43,9 @@ function render_progress(progress::TextProgress)
     flush(stdout)
 end
 
+"""
+Advance the progress bar by `n` units and redraw it.
+"""
 function advance_progress!(progress::Union{TextProgress, Nothing}, n::Integer = 1)
     progress === nothing && return nothing
     progress.current = min(progress.current + Int(n), progress.total)
@@ -41,6 +53,9 @@ function advance_progress!(progress::Union{TextProgress, Nothing}, n::Integer = 
     return nothing
 end
 
+"""
+Mark the progress bar as complete and finish its terminal line.
+"""
 function finish_progress!(progress::Union{TextProgress, Nothing})
     progress === nothing && return nothing
     progress.current = progress.total
@@ -50,6 +65,9 @@ function finish_progress!(progress::Union{TextProgress, Nothing})
     return nothing
 end
 
+"""
+Print a message above an active progress bar and then redraw the bar.
+"""
 function progress_message!(progress::Union{TextProgress, Nothing}, message::AbstractString)
     progress === nothing && return nothing
     println()

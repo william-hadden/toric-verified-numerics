@@ -63,7 +63,8 @@ end
 function run_upper_bound()
     setprecision(BigFloat, PRECISION) do
         coefficients = load_rational_coeffs_csv(U0_PATH)
-        derivatives = compute_second_derivatives(coefficients)
+        # derivatives = compute_second_derivatives(coefficients)
+        derivatives = build_derivative_pack(coefficients)
         inverse_coefficients = prepare_inverse_coeffs_for_subdivision(
             build_inverse_metric_coeffs(derivatives),
             PDEG,
