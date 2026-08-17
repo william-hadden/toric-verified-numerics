@@ -54,8 +54,7 @@ end
 
 cheb_interval_cache_key(N::Integer, ::Type{T}) where {T<:Interval} = (N, T, cheb_interval_precision(T))
 
-cheb_interval_constant(::Type{T}, x) where {T<:Interval} = interval(cheb_interval_endpoint_type(T)(x))
-
+cheb_interval_constant(::Type{T}, x) where {T<:Interval} = interval(cheb_interval_endpoint_type(T), x)
 """
 Trim exact zero rows and columns from the outer boundary of a coefficient array.
 """
