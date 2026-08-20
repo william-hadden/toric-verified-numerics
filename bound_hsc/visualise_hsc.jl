@@ -29,25 +29,32 @@ format_direction_component(value) = string(value)
 format_direction(xi) = "(" * join(format_direction_component.(xi), ",") * ")"
 plotly_rows(matrix::AbstractMatrix) = [collect(row) for row in eachrow(matrix)]
 
+function q_tick_label(value::Real)
+    rounded = round(Float64(value); sigdigits = 2)
+    text = isinteger(rounded) ? string(Int(rounded)) : string(rounded)
+    return replace(text, "-" => "−")
+end
+
 function original_q_colourbar(sampled_min::Real, sampled_max::Real)
     # Keep the bar readable. Fine values remain available in the hover text.
-    candidates = [
-        (value = -3.0, label = "−3"),
-        (value = -1.0, label = "−1"),
-        (value = -0.3, label = "−0.3"),
-        (value = -0.1, label = "−0.1"),
-        (value = 0.0, label = "0"),
-        (value = 0.1, label = "0.1"),
-        (value = 0.3, label = "0.3"),
-        (value = 1.0, label = "1"),
-        (value = 3.0, label = "3"),
-    ]
-    ticks = filter(tick -> sampled_min <= tick.value <= sampled_max, candidates)
+    candidates = [-3.0, -1.0, -0.3, -0.1, 0.0, 0.1, 0.3, 1.0, 3.0]
+    lower_position = asinh(sampled_min / COLOUR_SOFTENING)
+    upper_position = asinh(sampled_max / COLOUR_SOFTENING)
+    endpoint_gap = 0.06 * (upper_position - lower_position)
+    interior_ticks = filter(candidates) do value
+        sampled_min < value < sampled_max || return false
+        position = asinh(value / COLOUR_SOFTENING)
+        return position - lower_position >= endpoint_gap &&
+               upper_position - position >= endpoint_gap
+    end
+    # Always label the true displayed endpoints. Nearby interior ticks are
+    # removed above so these labels do not overlap.
+    q_ticks = [Float64(sampled_min); interior_ticks; Float64(sampled_max)]
     return PlotlyJS.attr(
         title = "Q₁(V)",
         tickmode = "array",
-        tickvals = asinh.([tick.value for tick in ticks] ./ COLOUR_SOFTENING),
-        ticktext = [tick.label for tick in ticks],
+        tickvals = asinh.(q_ticks ./ COLOUR_SOFTENING),
+        ticktext = q_tick_label.(q_ticks),
         tickfont = PlotlyJS.attr(size = 12),
         thickness = 26,
     )
@@ -228,6 +235,7 @@ function make_hsc_plot(step6_path::AbstractString, output_path::AbstractString;
                                      coloring = "none", showlabels = true),
             line = PlotlyJS.attr(color = "black", width = 2),
             hoverinfo = "skip",
+            showlegend = false,
         )
 
         initial_box = enclosing_rectangle(candidate.region)
@@ -236,6 +244,7 @@ function make_hsc_plot(step6_path::AbstractString, output_path::AbstractString;
             name = "certified integration region",
             colour = "#ffbf00",
             width = 3,
+            showlegend=false
         )
 
         ix, iy = candidate.seed_cell
@@ -255,17 +264,18 @@ function make_hsc_plot(step6_path::AbstractString, output_path::AbstractString;
             text = [seed_text],
             hovertemplate =
                 "selected seed<br>x=%{x:.6f}<br>Y=%{y:.6f}<br>rigorous Q₁(V)=%{text}<extra></extra>",
+            showlegend = false,
         )
 
-        title = "HSC near the certified region, ξ = $xi_label"
+        # title = "HSC near the certified region, ξ = $xi_label"
         layout = PlotlyJS.Layout(
-            title = title,
+            # title = title,
             width = 900,
             height = 760,
-            xaxis = PlotlyJS.attr(title = "x", constrain = "domain"),
+            xaxis = PlotlyJS.attr(title = "X", constrain = "domain"),
             yaxis = PlotlyJS.attr(
                 title = "Y",
-                scaleanchor = "x",
+                scaleanchor = "X",
                 scaleratio = 1,
             ),
             legend = PlotlyJS.attr(orientation = "h", y = -0.15),
