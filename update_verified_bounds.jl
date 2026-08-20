@@ -157,8 +157,10 @@ function run_verified_bounds_pipeline(;
     step1 = load_rational_coeffs_csv(coeffs_path; progress = load_progress)
     finish_progress!(load_progress)
 
-    println("Computing second derivatives ...")
-    step2 = compute_second_derivatives(step1)
+    # println("Computing second derivatives ...")
+    # step2 = compute_second_derivatives(step1)
+    println("Computing derivatives ...")
+    step2 = build_derivative_pack(step1)
 
     step3_progress = start_progress("Build inverse metric coefficients", 74)
     step3 = build_inverse_metric_coeffs(step2; progress = step3_progress)

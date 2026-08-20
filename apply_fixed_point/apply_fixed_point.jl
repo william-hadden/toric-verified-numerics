@@ -32,13 +32,18 @@ function get_sobolev_multiplication_constants(
         sqrt(mu / interval(BigFloat(3))) /
         (interval(BigFloat(2)) / interval(BigFloat(3)))
 
+    sobolev_gradient_factor =
+        sqrt(interval(BigFloat(3))) *
+        K_4_2 *
+        sqrt(sqrt(omega_4 / (V * mu^2)))
+
     const_emb_C1 = max(
-        K_4_2 * sqrt(sqrt(omega_4 / (V * mu^2))),
+        sobolev_gradient_factor,
         interval(BigFloat(1)) / sqrt(sqrt(V)),
     )
     const_emb_C2 = sqrt(sqrt(cbrt(V)))
     const_emb_C3 = max(
-        K_4_2 * sqrt(sqrt(omega_4 / (V * mu^2))) * interval(BigFloat(3)),
+        sobolev_gradient_factor * interval(BigFloat(3)),
         interval(BigFloat(1)) / sqrt(sqrt(V)),
     )
     const_emb_C4 = max(
@@ -51,19 +56,22 @@ function get_sobolev_multiplication_constants(
     )
 
     embedding_product = const_emb_C4 * const_emb_C3 * const_emb_C2 * const_emb_C1
+    # The manuscript uses the coarse embedding
+    # ||u||_C0 <= 4 C4 C3 C2 C1 ||u||_L2_3.
     const_sobolev_low_order_multiplication_M0 =
-        interval(BigFloat(2)) * embedding_product
+        interval(BigFloat(4)) * embedding_product
     const_sobolev_low_order_multiplication_M1 =
         const_sobolev_low_order_multiplication_M0 + const_emb_C1^2
     const_sobolev_low_order_multiplication_M2 =
         const_sobolev_low_order_multiplication_M0 +
         interval(BigFloat(4)) * const_emb_C1^2
 
+    # Coarse L2_3 multiplication constant from the manuscript's coefficient table.
     const_multiplication_theorem = max(
         max(
-            interval(BigFloat(4)) * embedding_product,
-            interval(BigFloat(2)) * embedding_product +
-            interval(BigFloat(3)) * const_emb_C1^2,
+            interval(BigFloat(8)) * embedding_product,
+            interval(BigFloat(4)) * embedding_product +
+            interval(BigFloat(4)) * const_emb_C1^2,
         ),
         interval(BigFloat(8)) * const_emb_C1^2,
     )
@@ -220,7 +228,7 @@ function get_higher_order_constant(
     # From proposition:non-linear-estimate, using ||u||_{L2_3} <= ||u||_{L2_5} <= r.
     return const_multiplication_theorem *
         (
-            interval(BigFloat(1)) +
+            interval(BigFloat(1)) / interval(BigFloat(2)) +
             (interval(BigFloat(1)) + const_multiplication_theorem * epsilon) *
             exp(interval(BigFloat(2)) * const_multiplication_theorem * r)
         )

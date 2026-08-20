@@ -19,18 +19,31 @@ function bound_riem_subdivision_local(
     num_subdivisions::Integer;
 )
     println("Step 1: Load u0")
-    step1 = load_rational_coeffs_csv(coeffs_path; progress = step1_progress)
-    println("Step 1: Load h0 ... ok")
+    step1 = load_rational_coeffs_csv(coeffs_path)
+    println("Step 1: Load u0 ... ok")
+    println("Step 1 guaranteed: $(all(isguaranteed, step1))")
 
     step2_progress = start_progress("Step 2: Compute second derivatives", 1)
-    step2 = compute_second_derivatives(step1)
+    # step2 = compute_second_derivatives(step1)
+    step2 = build_derivative_pack(step1)
     finish_progress!(step2_progress)
     println("Step 2: Compute second derivatives ... ok")
+    step2_guaranteed =
+        all(isguaranteed, step2.uxx) &&
+        all(isguaranteed, step2.uxy) &&
+        all(isguaranteed, step2.uyy)
+    println("Step 2 guaranteed: $step2_guaranteed")
 
     step3_progress = start_progress("Step 3: Build inverse metric coefficients", 74)
     step3 = build_inverse_metric_coeffs(step2; progress = step3_progress)
     finish_progress!(step3_progress)
     println("Step 3: Build inverse metric coefficient arrays ... ok")
+    step3_guaranteed =
+        all(isguaranteed, step3.A11) &&
+        all(isguaranteed, step3.A12) &&
+        all(isguaranteed, step3.A22) &&
+        all(isguaranteed, step3.D)
+    println("Step 3 guaranteed: $step3_guaranteed")
 
     step4_progress = start_progress("Step 4: Riemmanian numerator products", 136)
     step4 = compute_riem_numerators_truncated_coeff_space(step3; progress = step4_progress, pdeg)
@@ -77,18 +90,31 @@ function bound_cov_riem_subdivision_local(
     num_subdivisions::Integer;
 )
     println("Step 1: Load u0")
-    step1 = load_rational_coeffs_csv(coeffs_path; progress = step1_progress)
-    println("Step 1: Load h0 ... ok")
+    step1 = load_rational_coeffs_csv(coeffs_path)
+    println("Step 1: Load u0 ... ok")
+    println("Step 1 guaranteed: $(all(isguaranteed, step1))")
 
     step2_progress = start_progress("Step 2: Compute second derivatives", 1)
-    step2 = compute_second_derivatives(step1)
+    # step2 = compute_second_derivatives(step1)
+    step2 = build_derivative_pack(step1)
     finish_progress!(step2_progress)
     println("Step 2: Compute second derivatives ... ok")
+    step2_guaranteed =
+        all(isguaranteed, step2.uxx) &&
+        all(isguaranteed, step2.uxy) &&
+        all(isguaranteed, step2.uyy)
+    println("Step 2 guaranteed: $step2_guaranteed")
 
     step3_progress = start_progress("Step 3: Build inverse metric coefficients", 74)
     step3 = build_inverse_metric_coeffs(step2; progress = step3_progress)
     finish_progress!(step3_progress)
     println("Step 3: Build inverse metric coefficient arrays ... ok")
+    step3_guaranteed =
+        all(isguaranteed, step3.A11) &&
+        all(isguaranteed, step3.A12) &&
+        all(isguaranteed, step3.A22) &&
+        all(isguaranteed, step3.D)
+    println("Step 3 guaranteed: $step3_guaranteed")
 
     step4_progress = start_progress("Step 4: Cov Riemmanian numerator products", 936)
     step4 = compute_inverse_derivative_numerator_components_truncated_coeff_space(step3;k = 3, pdeg, progress = step4_progress,)
@@ -135,18 +161,31 @@ function bound_cov_cov_riem_subdivision_local(
     num_subdivisions::Integer;
 )
     println("Step 1: Load u0")
-    step1 = load_rational_coeffs_csv(coeffs_path; progress = step1_progress)
-    println("Step 1: Load h0 ... ok")
+    step1 = load_rational_coeffs_csv(coeffs_path)
+    println("Step 1: Load u0 ... ok")
+    println("Step 1 guaranteed: $(all(isguaranteed, step1))")
 
     step2_progress = start_progress("Step 2: Compute second derivatives", 1)
-    step2 = compute_second_derivatives(step1)
+    # step2 = compute_second_derivatives(step1)
+    step2 = build_derivative_pack(step1)
     finish_progress!(step2_progress)
     println("Step 2: Compute second derivatives ... ok")
+    step2_guaranteed =
+        all(isguaranteed, step2.uxx) &&
+        all(isguaranteed, step2.uxy) &&
+        all(isguaranteed, step2.uyy)
+    println("Step 2 guaranteed: $step2_guaranteed")
 
     step3_progress = start_progress("Step 3: Build inverse metric coefficients", 74)
     step3 = build_inverse_metric_coeffs(step2; progress = step3_progress)
     finish_progress!(step3_progress)
     println("Step 3: Build inverse metric coefficient arrays ... ok")
+    step3_guaranteed =
+        all(isguaranteed, step3.A11) &&
+        all(isguaranteed, step3.A12) &&
+        all(isguaranteed, step3.A22) &&
+        all(isguaranteed, step3.D)
+    println("Step 3 guaranteed: $step3_guaranteed")
 
     step4_progress = start_progress("Step 4:Cov Cov Riemmanian numerator products", 8132)
     step4 = compute_inverse_derivative_numerator_components_truncated_coeff_space(step3;k = 4, pdeg, progress = step4_progress,)

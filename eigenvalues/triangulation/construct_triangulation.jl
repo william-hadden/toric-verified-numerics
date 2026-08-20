@@ -101,11 +101,9 @@ function close_edge_marking!(triangles, marked)
 end
 
 """
-Insert the midpoint of every marked edge on the current integer lattice.
+Insert the integral midpoint of every marked edge in `node_keys`.
 
-Each refinement pass first doubles all `node_keys`, so every marked-edge
-midpoint has integer coordinates. Return the map from marked edges to their
-new midpoint indices.
+Return the map from marked edges to their new midpoint indices.
 """
 function insert_midpoints!(node_keys, marked)
     existing = Dict(key => index for (index, key) in pairs(node_keys))
@@ -325,6 +323,30 @@ function refine_selected_groups(mesh, ranges)
     return (; node_keys, triangles, scale = 2 * mesh.scale)
 end
 
+"""Refine four lower radial edges to match the reflected upper boundary mesh."""
+function symmetrize_radial_boundary(mesh)
+    lattice_size = maximum(first, mesh.node_keys)
+    segments = (
+        (lattice_size - 16, lattice_size - 8),
+        (lattice_size - 8, lattice_size),
+        (lattice_size - 4, lattice_size),
+        (lattice_size - 2, lattice_size),
+    )
+    node_ids = Dict(key => index for (index, key) in pairs(mesh.node_keys))
+    triangles = mesh.triangles
+    for (left, right) in segments
+        edge = minmax(node_ids[(left, -left)], node_ids[(right, -right)])
+        marked = Set([edge])
+        midpoint_ids = insert_midpoints!(mesh.node_keys, marked)
+        triangles = refine_marked_triangles(
+            mesh.node_keys, triangles, marked, midpoint_ids,
+        )
+        midpoint = midpoint_ids[edge]
+        node_ids[mesh.node_keys[midpoint]] = midpoint
+    end
+    return (; node_keys = mesh.node_keys, triangles, scale = mesh.scale)
+end
+
 """Return the fixed lattice mesh as `node_keys`, `triangles`, and `scale`."""
 function fixed_lattice_mesh()
     mesh = base_sector_mesh(800)
@@ -343,7 +365,7 @@ function fixed_lattice_mesh()
     for ranges in SELECTIVE_GROUP_RANGES
         mesh = refine_selected_groups(mesh, ranges)
     end
-    return mesh
+    return symmetrize_radial_boundary(mesh)
 end
 
 """Write `matrix` under `name` to MAT-v4 stream `io`; return nothing."""

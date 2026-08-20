@@ -39,10 +39,14 @@ function load_coeff_matrix_csv(path::AbstractString, parse_entry)::Matrix{Interv
     return coeffs
 end
 
-"""Load the rational coefficient matrix from the canonical CSV export."""
+"""
+Load the rational coefficient matrix from the canonical CSV export.
+"""
 load_rational_coeffs_csv(path::AbstractString) = load_coeff_matrix_csv(path, parse_rational_interval)
 
-"""Parse a decimal metric coefficient as an outward-rounded interval."""
+"""
+Parse a decimal metric coefficient as an outward-rounded interval.
+"""
 function parse_metric_decimal_interval(entry::AbstractString)::Interval{BigFloat}
     stripped = strip(entry)
     if startswith(stripped, '"') && endswith(stripped, '"') && length(stripped) >= 2
@@ -54,7 +58,9 @@ function parse_metric_decimal_interval(entry::AbstractString)::Interval{BigFloat
     return parse_bound_value(stripped)
 end
 
-"""Load a rectangular CSV matrix of decimal metric coefficients."""
+"""
+Load a rectangular CSV matrix of decimal metric coefficients.
+"""
 load_metric_coeffs_csv(path::AbstractString) = load_coeff_matrix_csv(path, parse_metric_decimal_interval)
 
 """

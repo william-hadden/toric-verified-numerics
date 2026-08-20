@@ -112,6 +112,13 @@ if test_filter in ("all", "cheb")
     end
 
     @testset "interval DCT enclosures" begin
+        for x in (BigInt(1) // BigInt(3), BigInt(1) // BigInt(19))
+            X = cheb_interval_constant(Interval{BigFloat}, x)
+
+            @test Rational{BigInt}(inf(X)) <= x
+            @test x <= Rational{BigInt}(sup(X))
+        end
+
         A = reshape([interval(2)], 1, 1)
         B = reshape([interval(-3)], 1, 1)
         @test interval_coeffs_enclose(cheb_mul2(A, B; method = :direct), cheb_mul2(A, B; method = :interval_dct))

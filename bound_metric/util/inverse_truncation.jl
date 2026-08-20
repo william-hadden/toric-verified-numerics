@@ -1,7 +1,11 @@
-"""Compute second-derivative tail bounds used by inverse-metric certificates."""
+"""
+Compute second-derivative tail bounds used by inverse-metric certificates.
+"""
 function derivative_tail_bounds(full_coeffs, truncated_coeffs, pdeg::Integer)
-    full_step2 = compute_second_derivatives(full_coeffs)
-    trunc_step2 = compute_second_derivatives(truncated_coeffs)
+    # full_step2 = compute_second_derivatives(full_coeffs)
+    # trunc_step2 = compute_second_derivatives(truncated_coeffs)
+    full_step2 = build_derivative_pack(full_coeffs)
+    trunc_step2 = build_derivative_pack(truncated_coeffs)
 
     uxx_tail = chebyshev_tensor_tail_bound(full_step2.uxx, pdeg)
     uyy_tail = chebyshev_tensor_tail_bound(full_step2.uyy, pdeg)

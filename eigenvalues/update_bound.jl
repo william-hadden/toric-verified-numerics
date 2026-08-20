@@ -42,15 +42,10 @@ function liu_lower_bound(lambda_fem_lower, comparison_constant)
 end
 
 """
-Assume L is a lower bound for the LHS in equation `deltaenergy` from the paper,
-i.e. L <= lambda_1/(1 - sqrt(7 delta/3)(3 lambda_1/(2 mu) + 1) -
-sqrt(7 delta)/(2 pi (3 - 7 delta))). Setting a=sqrt(7 delta/3),
-d=sqrt(7 delta)/(2 pi (3 - 7 delta)), c=1-a-d, and b=3a/(2 mu), we get
-L <= lambda_1/(c - b lambda_1). Rearranging gives
-lambda_1 >= L c/(1 + L b).
+Implement the bound from `equation:lambda-min-lower-bound-final`.
 
-The arguments `lambda_inset_lower`, `delta`, and `ricci_lower_bound` are L,
-delta, and mu, respectively. Return a rigorous lower bound for lambda_1.
+The arguments are lambda_min^delta, delta, and mu, respectively. Return a
+rigorous lower bound for lambda_min.
 """
 function compact_lower_bound(lambda_inset_lower, delta, ricci_lower_bound)
     lambda = interval(BigFloat(lambda_inset_lower))
@@ -61,16 +56,17 @@ function compact_lower_bound(lambda_inset_lower, delta, ricci_lower_bound)
     inf(delta) > 0 || error("The inset parameter must be positive")
     inf(three - seven * delta) > 0 ||
         error("The inset parameter must be smaller than 3/7")
-    square_root = sqrt(seven * delta)
-    boundary_fraction = sqrt(seven * delta / three)
-    c = one - boundary_fraction -
-        square_root / (two * interval(BigFloat, pi) * (three - seven * delta))
-    b = boundary_fraction * three / (two * mu)
-    inf(c) > 0 || error("The compact-comparison numerator is not positive")
-    denominator = one + lambda * b
+    numerator = lambda * (
+        one - sqrt(seven * delta / three) -
+        seven * delta / (three - seven * delta)
+    )
+    inf(numerator) > 0 ||
+        error("The compact-comparison numerator is not positive")
+    denominator = one +
+        three * sqrt(seven * delta / three) * lambda / (two * mu)
     inf(denominator) > 0 ||
         error("The compact-comparison denominator is not positive")
-    return inf(lambda * c / denominator)
+    return inf(numerator / denominator)
 end
 
 """Read the fixed FEM certificate and update the two JSON eigenvalue bounds."""
