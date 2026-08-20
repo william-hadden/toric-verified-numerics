@@ -344,7 +344,6 @@ function main()
     find_U_V_proposition_negative_hsc_at_point(U0_PATH; eta, rho)
 end
 
-# "c:\\Users\\willi\\.vscode\\extensions\\julialang.language-julia-1.219.2\\scripts\\debugger\\run_debugger.jl"
 if abspath(PROGRAM_FILE) == @__FILE__
     Base.invokelatest(main)
 end

@@ -51,10 +51,10 @@ function inflate_constant_mode!(coeffs, eps)
     coeffs = copy(coeffs)
     a00 = coeffs[1, 1]
 
-    coeffs[1, 1] = interval(
-        inf(a00) - sup(eps),
-        sup(a00) + sup(eps),
-    )
+    r = sup(eps)
+    symmetric_eps = interval(-r,r)
+
+    coeffs[1, 1] = a00 + symmetric_eps
 
     return coeffs
 end
