@@ -5,6 +5,30 @@ real constant torus direction `V` and `JV`.  Directions are represented by
 real pairs `xi = (xi1, xi2)`; the current search enumerates primitive rational
 pairs, up to an overall real sign.
 
+## How to run
+
+Run all commands from the repository root. The files
+`data/happrox/coeffs-rational.csv` and `data/verified_bounds.json` must already
+be present.
+
+First, search for a negative-curvature candidate and generate the local
+checkpoints:
+
+```
+julia --startup-file=no --threads=1 --project=. bound_hsc/find_negative_curvature_region.jl
+```
+
+The script prints a path after `Run checkpoints and parameters:`. This is the
+run directory needed for the confirmation step.
+
+Next, independently confirm the rigorous estimate for the saved candidate:
+
+```
+julia --startup-file=no --threads=1 --project=. bound_hsc/verify_proposition_5_6.jl RUN_DIRECTORY
+```
+
+Replace `RUN_DIRECTORY` with the directory printed by the finder.
+
 ## Real-direction assumption
 
 The contraction implemented in `compute_Q_rigorously` and in the compact
