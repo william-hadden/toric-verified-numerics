@@ -326,13 +326,13 @@ function set_eta_rho()
     epsilon = read_bound("fixed_point_bounds")["contraction_radius_upper_bound"] 
 
     const_emb_C1, const_emb_C2, const_emb_C3, const_emb_C4 = get_sobolev_multiplication_constants()
-    C_1 = const_emb_C4 * const_emb_C3 * const_emb_C2 * const_emb_C1
+    C_1 = 4 * const_emb_C4 * const_emb_C3 * const_emb_C2 * const_emb_C1
     eta = C_1 * epsilon
 
     eta < 1 ||
     throw(DomainError(C_1 * epsilon, "C_1 * epsilon must be less than 1"))
 
-    rho = epsilon/(interval(1)-C_1*epsilon) +  (const_emb_C4^2*epsilon^2)/(interval(1)-C_1*epsilon)^2
+    rho = epsilon/(interval(1)-C_1*epsilon) +  (const_emb_C1^2*epsilon^2)/(interval(1)-C_1*epsilon)^2
 
     return eta, rho
 end
