@@ -106,52 +106,16 @@ function compute_ricci_numerators_from_inverse_coeffs(
     error("Unknown Ricci numerator method: $method")
 end
 
-function ricci_bounds_from_numerators(ricci_coeffs, D_lower)
-    entry_bound(num) = chebyshev_coeff_sup_bound(num) / (D_lower^3)
-    R11_bound = entry_bound(ricci_coeffs.R11_num)
-    R12_bound = entry_bound(ricci_coeffs.R12_num)
-    R21_bound = entry_bound(ricci_coeffs.R21_num)
-    R22_bound = entry_bound(ricci_coeffs.R22_num)
-    squared = interval_constant(2) * (
-        R11_bound^2 + interval_constant(2) * R12_bound * R21_bound + R22_bound^2
-    )
-    return (;
-        R11_num = ricci_coeffs.R11_num,
-        R12_num = ricci_coeffs.R12_num,
-        R21_num = ricci_coeffs.R21_num,
-        R22_num = ricci_coeffs.R22_num,
-        R11_bound, R12_bound, R21_bound, R22_bound,
-        ricci_norm_squared_bound = squared,
-        ricci_norm_bound = sqrt(squared),
-        D_lower,
-    )
-end
-
-function compute_ricci_bound_from_inverse_coeffs(
-    inverse_coeffs, inverse_bounds; progress = nothing,
-    numerator_method::Symbol = :coefficient_space, pdeg::Integer = 0,
-)
-    coeffs = compute_ricci_numerators_from_inverse_coeffs(
-        inverse_coeffs; progress, method = numerator_method, pdeg,
-    )
-    return ricci_bounds_from_numerators(coeffs, inverse_bounds.D_lower)
-end
-
-function coeff_sup_bound_number(coeffs::AbstractMatrix{<:Number})
-    return sup(chebyshev_coeff_sup_bound(intervalize_coefficients(coeffs)))
-end
-
 function truncated_coeff_enclosure(coeffs::AbstractMatrix{<:Number}, pdeg::Integer)
     trunc = truncate_coeffs_with_tail(coeffs, pdeg)
-    tail = trunc.tail isa Interval ? sup(abs(trunc.tail)) : abs(trunc.tail)
-    return (; coeffs = trunc.coeffs, tail, pdeg = trunc.pdeg)
+    return (; coeffs = trunc.coeffs, tail = trunc.tail, pdeg = trunc.pdeg)
 end
 
 function truncate_enclosure_coeffs(coeffs::AbstractMatrix{<:Number}, tail, pdeg::Integer)
     trunc = truncate_coeffs_with_tail(coeffs, pdeg)
-
-    old_tail = tail isa Interval ? sup(abs(tail)) : abs(tail)
-    new_tail = trunc.tail isa Interval ? sup(abs(trunc.tail)) : abs(trunc.tail)
+    
+    old_tail = abs(tail)
+    new_tail = abs(trunc.tail)
 
     return (; coeffs = trunc.coeffs, tail = old_tail + new_tail, pdeg = trunc.pdeg)
 end
@@ -181,7 +145,7 @@ scaled by `c`, while the tail bound is scaled by `abs(c)` (or the supremum of
 adding any newly discarded coefficient mass to the returned tail.
 """
 function enclosure_scale(f, c, pdeg::Integer)
-    c_abs = c isa Interval ? sup(abs(c)) : abs(c)
+    c_abs = interval(sup(abs(c))) 
     return truncate_enclosure_coeffs(cheb_scale(f.coeffs, c), c_abs * f.tail, pdeg)
 end
 
@@ -201,10 +165,11 @@ coefficient multiplication.
 function enclosure_mul(f, g, pdeg::Integer; progress = nothing)
     product_coeffs = cheb_mul_fast(f.coeffs, g.coeffs)
     advance_progress!(progress)
-
+    g_coeffs_interval = intervalize_coefficients(g.coeffs)
+    f_coeffs_interval = intervalize_coefficients(f.coeffs)
     product_tail =
-        f.tail * coeff_sup_bound_number(g.coeffs) +
-        g.tail * coeff_sup_bound_number(f.coeffs) +
+        f.tail * interval(sup(chebyshev_coeff_sup_bound(g_coeffs_interval))) +
+        g.tail * interval(sup(chebyshev_coeff_sup_bound(f_coeffs_interval))) +
         f.tail * g.tail
 
     return truncate_enclosure_coeffs(product_coeffs, product_tail, pdeg)
@@ -870,7 +835,6 @@ function compute_cov_riem_by_local_subdivision_truncated(
     xboxes = subdivide_minus_one_one(nx)
     yboxes = subdivide_minus_one_one(ny)
 
-    global_cov_riem_norm_squared = big"0"
     global_cov_riem_norm = big"0"
     global_D_lower = big"Inf"
 
@@ -916,15 +880,12 @@ function compute_cov_riem_by_local_subdivision_truncated(
         )
         cov_riem_norm_squared_box = cov_riem_norm_squared_num_box / (D_box^9)
 
-        cov_riem_norm_squared_bound = sup(cov_riem_norm_squared_box)
+        cov_riem_norm_bound = sup(sqrt(cov_riem_norm_squared_box))
 
-        cov_riem_norm_squared_bound < 0 && error(
+        cov_riem_norm_bound < 0 && error(
             "covariant Riemann norm-squared enclosure has negative upper bound: $cov_riem_norm_squared_box"
         )
 
-        cov_riem_norm_bound = sqrt(cov_riem_norm_squared_bound)
-
-        global_cov_riem_norm_squared = max(global_cov_riem_norm_squared, cov_riem_norm_squared_bound)
         global_cov_riem_norm = max(global_cov_riem_norm, cov_riem_norm_bound)
         global_D_lower = min(global_D_lower, D_lower)
 
@@ -937,8 +898,6 @@ function compute_cov_riem_by_local_subdivision_truncated(
             D_lower,
             deriv_box,
             cov_riem_norm_squared_num_box,
-            cov_riem_norm_squared_box,
-            cov_riem_norm_squared_bound,
             cov_riem_norm_bound,
         ))
 
@@ -952,7 +911,6 @@ function compute_cov_riem_by_local_subdivision_truncated(
         trunc,
         box_results,
         D_lower = global_D_lower,
-        cov_riem_norm_squared_bound = global_cov_riem_norm_squared,
         cov_riem_norm_bound = global_cov_riem_norm,
     )
 end
@@ -1062,7 +1020,6 @@ function compute_riem_by_local_subdivision_truncated(
     xboxes = subdivide_minus_one_one(nx)
     yboxes = subdivide_minus_one_one(ny)
 
-    global_riem_norm_squared = big"0"
     global_riem_norm = big"0"
     global_D_lower = big"Inf"
 
@@ -1105,15 +1062,12 @@ function compute_riem_by_local_subdivision_truncated(
         )
         riem_norm_squared_box = riem_norm_squared_num_box / (D_box^6)
 
-        riem_norm_squared_bound = sup(riem_norm_squared_box)
+        riem_norm_bound = sup(sqrt(riem_norm_squared_box))
 
-        riem_norm_squared_bound < 0 && error(
+        riem_norm_bound < 0 && error(
             "Riemann norm-squared enclosure has negative upper bound: $riem_norm_squared_box"
         )
 
-        riem_norm_bound = sqrt(riem_norm_squared_bound)
-
-        global_riem_norm_squared = max(global_riem_norm_squared, riem_norm_squared_bound)
         global_riem_norm = max(global_riem_norm, riem_norm_bound)
         global_D_lower = min(global_D_lower, D_lower)
 
@@ -1129,7 +1083,6 @@ function compute_riem_by_local_subdivision_truncated(
             Riem_bound,
             riem_norm_squared_num_box,
             riem_norm_squared_box,
-            riem_norm_squared_bound,
             riem_norm_bound,
         ))
 
@@ -1143,7 +1096,6 @@ function compute_riem_by_local_subdivision_truncated(
         trunc,
         box_results,
         D_lower = global_D_lower,
-        riem_norm_squared_bound = global_riem_norm_squared,
         riem_norm_bound = global_riem_norm,
     )
 end
@@ -1173,7 +1125,6 @@ function compute_ricci_bound_by_local_subdivision_truncated(
     global_R12 = big"0"
     global_R21 = big"0"
     global_R22 = big"0"
-    global_ricci_norm_squared = big"0"
     global_ricci_norm = big"0"
     global_D_lower = big"Inf"
 
@@ -1212,19 +1163,16 @@ function compute_ricci_bound_by_local_subdivision_truncated(
         )
         ricci_norm_squared_box = ricci_norm_squared_num_box / (D_box^6)
 
-        ricci_norm_squared_bound = sup(ricci_norm_squared_box)
+        ricci_norm_bound = sup(sqrt(ricci_norm_squared_box))
 
-        ricci_norm_squared_bound < 0 && error(
+        ricci_norm_bound < 0 && error(
             "Ricci norm-squared enclosure has negative upper bound: $ricci_norm_squared_box"
         )
-
-        ricci_norm_bound = sqrt(ricci_norm_squared_bound)
 
         global_R11 = max(global_R11, R11_bound)
         global_R12 = max(global_R12, R12_bound)
         global_R21 = max(global_R21, R21_bound)
         global_R22 = max(global_R22, R22_bound)
-        global_ricci_norm_squared = max(global_ricci_norm_squared, ricci_norm_squared_bound)
         global_ricci_norm = max(global_ricci_norm, ricci_norm_bound)
         global_D_lower = min(global_D_lower, D_lower)
 
@@ -1249,7 +1197,6 @@ function compute_ricci_bound_by_local_subdivision_truncated(
             R22_bound,
             ricci_norm_squared_num_box,
             ricci_norm_squared_box,
-            ricci_norm_squared_bound,
             ricci_norm_bound,
         ))
 
@@ -1267,7 +1214,6 @@ function compute_ricci_bound_by_local_subdivision_truncated(
         R12_bound = global_R12,
         R21_bound = global_R21,
         R22_bound = global_R22,
-        ricci_norm_squared_bound = global_ricci_norm_squared,
         ricci_norm_bound = global_ricci_norm,
     )
 end
@@ -1397,7 +1343,6 @@ function compute_cov_cov_riem_by_local_subdivision_truncated(
     xboxes = subdivide_minus_one_one(nx)
     yboxes = subdivide_minus_one_one(ny)
 
-    global_cov_cov_riem_norm_squared = big"0"
     global_cov_cov_riem_norm = big"0"
     global_D_lower = big"Inf"
 
@@ -1444,16 +1389,12 @@ function compute_cov_cov_riem_by_local_subdivision_truncated(
         )
         cov_cov_riem_norm_squared_box = cov_cov_riem_norm_squared_num_box / (D_box^12)
 
-        cov_cov_riem_norm_squared_bound = sup(cov_cov_riem_norm_squared_box)
+        cov_cov_riem_norm_bound = sup(sqrt(cov_cov_riem_norm_squared_box))
 
-        cov_cov_riem_norm_squared_bound < 0 && error(
+        cov_cov_riem_norm_bound < 0 && error(
             "cov-cov Riemann norm-squared enclosure has negative upper bound: $cov_cov_riem_norm_squared_box"
         )
 
-        cov_cov_riem_norm_bound = sqrt(cov_cov_riem_norm_squared_bound)
-
-        global_cov_cov_riem_norm_squared =
-            max(global_cov_cov_riem_norm_squared, cov_cov_riem_norm_squared_bound)
         global_cov_cov_riem_norm =
             max(global_cov_cov_riem_norm, cov_cov_riem_norm_bound)
         global_D_lower = min(global_D_lower, D_lower)
@@ -1468,7 +1409,6 @@ function compute_cov_cov_riem_by_local_subdivision_truncated(
             deriv_box,
             cov_cov_riem_norm_squared_num_box,
             cov_cov_riem_norm_squared_box,
-            cov_cov_riem_norm_squared_bound,
             cov_cov_riem_norm_bound,
         ))
 
@@ -1482,7 +1422,6 @@ function compute_cov_cov_riem_by_local_subdivision_truncated(
         trunc,
         box_results,
         D_lower = global_D_lower,
-        cov_cov_riem_norm_squared_bound = global_cov_cov_riem_norm_squared,
         cov_cov_riem_norm_bound = global_cov_cov_riem_norm,
     )
 end
@@ -1618,7 +1557,6 @@ function print_truncated_subdivision_ricci_bound_summary(step)
     println("    boxes: $(step.nx) x $(step.ny)")
     println("    pdeg: $(step.pdeg <= 0 ? "full" : step.pdeg)")
     println("    ||Ric||_inf <= $(step.ricci_norm_bound)")
-    println("    ||Ric||_inf^2 <= $(step.ricci_norm_squared_bound)")
     println()
     println("Ricci entry bounds:")
     println("    ||R^1_1||_inf <= $(step.R11_bound)")
@@ -1636,7 +1574,7 @@ end
 """
 Print the certified `C^0` Riemann bound returned by subdivision.
 
-The summary reports the global `||Riem||` and `||Riem||^2` bounds together with
+The summary reports the global `||Riem||` bound together with
 the denominator positivity certificate and truncation tail for `D`.
 """
 function print_truncated_subdivision_riem_bound_summary(step)
@@ -1645,7 +1583,6 @@ function print_truncated_subdivision_riem_bound_summary(step)
     println("    boxes: $(step.nx) x $(step.ny)")
     println("    pdeg: $(step.pdeg <= 0 ? "full" : step.pdeg)")
     println("    ||Riem||_inf <= $(step.riem_norm_bound)")
-    println("    ||Riem||_inf^2 <= $(step.riem_norm_squared_bound)")
     println()
     println("Denominator positivity certificate:")
     println("    inf D >= $(step.D_lower)")
@@ -1657,7 +1594,7 @@ end
 """
 Print the certified `C^0` covariant Riemann bound returned by subdivision.
 
-The summary reports the global `||nabla Riem||` and squared-norm bounds, plus
+The summary reports the global `||nabla Riem||` plus
 the denominator certificate and truncation tail for `D`.
 """
 function print_truncated_subdivision_cov_riem_bound_summary(step)
@@ -1666,7 +1603,6 @@ function print_truncated_subdivision_cov_riem_bound_summary(step)
     println("    boxes: $(step.nx) x $(step.ny)")
     println("    pdeg: $(step.pdeg <= 0 ? "full" : step.pdeg)")
     println("    ||∇Riem||_inf <= $(step.cov_riem_norm_bound)")
-    println("    ||∇Riem||_inf^2 <= $(step.cov_riem_norm_squared_bound)")
     println()
     println("Denominator positivity certificate:")
     println("    inf D >= $(step.D_lower)")
@@ -1678,7 +1614,7 @@ end
 """
 Print the certified `C^0` second covariant Riemann bound.
 
-The summary reports the global `||nabla^2 Riem||` and squared-norm bounds, plus
+The summary reports the global `||nabla^2 Riem||` bound, plus
 the denominator certificate and truncation tail for `D`.
 """
 function print_truncated_subdivision_cov_cov_riem_bound_summary(step)
@@ -1687,7 +1623,6 @@ function print_truncated_subdivision_cov_cov_riem_bound_summary(step)
     println("    boxes: $(step.nx) x $(step.ny)")
     println("    pdeg: $(step.pdeg <= 0 ? "full" : step.pdeg)")
     println("    ||∇²Riem||_inf <= $(step.cov_cov_riem_norm_bound)")
-    println("    ||∇²Riem||_inf^2 <= $(step.cov_cov_riem_norm_squared_bound)")
     println()
     println("Denominator positivity certificate:")
     println("    inf D >= $(step.D_lower)")
