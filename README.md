@@ -68,10 +68,7 @@ If not HSC checkpoints:
 bound_metric/bound_inverse -> bound_metric/bound_riem ->
 bound_metric/bound_ricci -> bound_residual/bound_residual
 ->eigenvalues/orchestrate.jl -> apply_fixed_point/apply_fixed_point ->
-bound_hsc/find_negative_curvature_region -> bound_hsc/verify_proposition_5_6
-bound_hsc/bound_hsc.jl -> eigenvalue_comparison/upper_bound.jl ->
-eigenvalue_comparison/eigenvalue_for_true_KE_metric
-
+bound_hsc/find_negative_curvature_region -> bound_hsc/verify_proposition_5_6 -> eigenvalue_comparison/upper_bound.jl -> eigenvalue_comparison/eigenvalue_for_true_KE_metric
 
 ## Tests
 
