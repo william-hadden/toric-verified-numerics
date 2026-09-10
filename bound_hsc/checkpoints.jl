@@ -1,5 +1,13 @@
 using Serialization
 using SHA
+using IntervalArithmetic
+
+isdefined(@__MODULE__, :PolytopeBox) || include(joinpath(@__DIR__, "util.jl"))
+
+hsc_checkpoint_environment() = (
+    julia_version = string(VERSION),
+    interval_arithmetic_version = string(Base.pkgversion(IntervalArithmetic)),
+)
 
 const DEFAULT_HSC_CHECKPOINT_DIR = joinpath(@__DIR__, "checkpoints")
 const HSC_CHECKPOINT_FORMAT_VERSION = 1
@@ -36,10 +44,12 @@ end
 """Identify the coefficient data and arithmetic precision used by an HSC run."""
 function hsc_checkpoint_context(coeffs_path::AbstractString)
     resolved_path = realpath(coeffs_path)
-    digest = open(sha256, resolved_path)
+    contents = read(resolved_path, String)
+    normalized_contents = replace(contents, "\r\n" => "\n")
+    normalized_bytes = codeunits(normalized_contents)
     return (
-        coefficient_sha256 = bytes2hex(digest),
-        coefficient_size = filesize(resolved_path),
+        coefficient_sha256 = bytes2hex(sha256(normalized_bytes)),
+        coefficient_size = length(normalized_bytes),
         bigfloat_precision = precision(BigFloat),
         coefficient_format = :rational_csv,
     )
@@ -64,7 +74,7 @@ has_hsc_checkpoint(
     save_hsc_checkpoint(step, result; context, parameters,
                         checkpoint_dir=DEFAULT_HSC_CHECKPOINT_DIR)
 
-Serialize the result of HSC step 2, 3, or 4 to `checkpoint_dir/stepN.jls`.
+Serialize the result of HSC step 2 through 6 to `checkpoint_dir/stepN.jls`.
 The checkpoint directory is created if necessary. Returns the saved file path.
 """
 function save_hsc_checkpoint(
@@ -81,6 +91,7 @@ function save_hsc_checkpoint(
         step = Int(step),
         context,
         parameters,
+        environment = hsc_checkpoint_environment(),
         result,
     )
 
@@ -97,25 +108,23 @@ function save_hsc_checkpoint(
 end
 
 """
-    load_hsc_checkpoint(step; expected_context=nothing, expected_parameters=nothing,
-                        checkpoint_dir=DEFAULT_HSC_CHECKPOINT_DIR)
+    read_checkpoint_envelope(path, step)
 
-Reload a result previously written by [`save_hsc_checkpoint`](@ref). When
-expected metadata is supplied, reject stale checkpoints rather than silently
-using results produced from different coefficients or arithmetic settings.
+Read and validate a checkpoint envelope, reporting environment differences.
+Does not change the current arithmetic precision.
 """
-function load_hsc_checkpoint(
-    step::Integer;
-    expected_context = nothing,
-    expected_parameters = nothing,
-    checkpoint_dir::AbstractString = DEFAULT_HSC_CHECKPOINT_DIR,
-)
-    path = hsc_checkpoint_path(step; checkpoint_dir)
+function read_checkpoint_envelope(path::AbstractString, step::Integer)
     isfile(path) || throw(ArgumentError("HSC checkpoint does not exist: $path"))
     checkpoint = try
         open(deserialize, path)
     catch error
-        throw(ArgumentError("Unable to deserialize HSC checkpoint $path: $error"))
+        throw(ArgumentError(
+            "Unable to deserialize HSC checkpoint $path. " *
+            "Current environment: $(hsc_checkpoint_environment()). " *
+            "Use the writer's Julia version, Manifest.toml, and repository revision. " *
+            "The saved environment may be unavailable because deserialization failed. " *
+            "Original error: $(sprint(showerror, error))",
+        ))
     end
 
     valid_envelope = checkpoint isa NamedTuple &&
@@ -130,6 +139,30 @@ function load_hsc_checkpoint(
     checkpoint.step == step || throw(ArgumentError(
         "HSC checkpoint step mismatch in $path",
     ))
+    if haskey(checkpoint, :environment) &&
+       !isequal(checkpoint.environment, hsc_checkpoint_environment())
+        println(stderr, "HSC checkpoint environment differs: saved ",
+                checkpoint.environment, "; current ", hsc_checkpoint_environment(),
+                ". Use matching Julia/package versions if compatibility problems occur.")
+    end
+    return checkpoint
+end
+
+"""
+Load a saved HSC result, with its required types already defined by this file.
+For interactive loads, restore the saved global BigFloat precision. Pipeline
+loads supplying expected_context retain and validate their current precision.
+Older checkpoints without environment metadata remain readable.
+"""
+function load_hsc_checkpoint(
+    step::Integer;
+    expected_context = nothing,
+    expected_parameters = nothing,
+    checkpoint_dir::AbstractString = DEFAULT_HSC_CHECKPOINT_DIR,
+    restore_precision::Bool = expected_context === nothing,
+)
+    path = hsc_checkpoint_path(step; checkpoint_dir)
+    checkpoint = read_checkpoint_envelope(path, step)
     if expected_context !== nothing && !isequal(checkpoint.context, expected_context)
         throw(ArgumentError(
             "HSC checkpoint $path was produced from different coefficients or " *
@@ -141,6 +174,7 @@ function load_hsc_checkpoint(
             "HSC checkpoint $path was produced with different step parameters",
         ))
     end
+    restore_precision && setprecision(BigFloat, checkpoint.context.bigfloat_precision)
     return checkpoint.result
 end
 

@@ -388,12 +388,25 @@ Load the HSC code, select the checkpoint directory printed by the run, and
 load the Step 6 result:
 
 ```julia
-include("bound_hsc/bound_hsc.jl")
+include("bound_hsc/checkpoints.jl")
 
 checkpoint_dir =
     "bound_hsc/checkpoints/run_pdeg-30_grid-24_directions-5_depth-0-6_95ef054545ec"
 result = load_hsc_checkpoint(6; checkpoint_dir);
 ```
+
+This loader defines the saved HSC types and restores the checkpoint's global
+`BigFloat` precision. Pass `restore_precision=false` to keep the current precision.
+Pipeline loads with `expected_context` validate the current precision instead.
+New checkpoints record Julia and IntervalArithmetic versions for diagnostics;
+use the same Julia version, `Manifest.toml`, and repository revision when sharing.
+The `.jls` format still depends on Julia serialization compatibility.
+
+Coefficient fingerprints normalize CRLF to LF, including the stored byte count.
+Existing checkpoints made from CRLF files require regeneration or migration before
+pipeline reuse; existing LF fingerprints are unchanged. Older checkpoints without
+environment metadata can still be loaded. Share the whole checkpoint directory,
+including shared steps 2 and 3 and the selected run subfolder containing steps 4–6.
 
 The run-specific directory name depends on the search parameters. To list the
 available Step 6 checkpoints:

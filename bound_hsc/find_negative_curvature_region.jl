@@ -10,7 +10,7 @@ include(joinpath(@__DIR__, "..", "bound_metric", "util", "inverse_truncation.jl"
 include(joinpath(@__DIR__, "..", "bound_metric", "util", "inverse_subdivision_bounds.jl"))
 include(joinpath(@__DIR__, "..", "bound_metric", "util", "curvature_bounds.jl"))
 include(joinpath(@__DIR__, "checkpoints.jl"))
-include(joinpath(@__DIR__, "util.jl"))
+isdefined(@__MODULE__, :PolytopeBox) || include(joinpath(@__DIR__, "util.jl"))
 include(joinpath(@__DIR__, "arithmetic_helpers.jl"))
 
 

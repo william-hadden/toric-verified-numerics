@@ -10,27 +10,8 @@ include(joinpath(@__DIR__, "..", "bound_metric", "util", "inverse_truncation.jl"
 include(joinpath(@__DIR__, "..", "bound_metric", "util", "inverse_subdivision_bounds.jl"))
 include(joinpath(@__DIR__, "..", "bound_metric", "util", "curvature_bounds.jl"))
 include(joinpath(@__DIR__, "checkpoints.jl"))
-include(joinpath(@__DIR__, "util.jl"))
+isdefined(@__MODULE__, :PolytopeBox) || include(joinpath(@__DIR__, "util.jl"))
 include(joinpath(@__DIR__, "arithmetic_helpers.jl"))
-
-function read_checkpoint_envelope(path::AbstractString, expected_step::Integer)
-    isfile(path) || throw(ArgumentError("Checkpoint does not exist: $path"))
-    checkpoint = try
-        open(deserialize, path)
-    catch exception
-        throw(ArgumentError("Unable to deserialize checkpoint $path: $exception"))
-    end
-
-    required = (:format_version, :step, :context, :parameters, :result)
-    checkpoint isa NamedTuple && all(key -> haskey(checkpoint, key), required) ||
-        throw(ArgumentError("Legacy or invalid HSC checkpoint: $path"))
-    checkpoint.format_version == HSC_CHECKPOINT_FORMAT_VERSION ||
-        throw(ArgumentError("Unsupported HSC checkpoint format: $path"))
-    checkpoint.step == expected_step || throw(ArgumentError(
-        "Expected a Step $expected_step checkpoint, but $path is Step $(checkpoint.step)",
-    ))
-    return checkpoint
-end
 
 function supporting_checkpoint_path(step6_path::AbstractString, step::Integer)
     run_dir = dirname(step6_path)
