@@ -14,8 +14,8 @@ Bound the `C^0` norm of the Ricci tensor using truncated local subdivision.
 """
 function bound_ricci_subdivision_local(
     coeffs_path::AbstractString,
-    pdeg::Integer,
-    num_subdivisions::Integer;
+    pdeg::Integer = 20,
+    num_subdivisions::Integer = 8;
 )
     println("Step 1: Load u0")
     step1 = load_rational_coeffs_csv(coeffs_path)
@@ -114,8 +114,8 @@ function bound_ricci_subdivision_local(
 end
 
 function bound_ricci_from_below(coeffs_path::AbstractString,
-    pdeg::Integer,
-    num_subdivisions::Integer;
+    pdeg::Integer = 20,
+    num_subdivisions::Integer = 30;
 )
     println("Step 1: Load u0")
     step1 = load_rational_coeffs_csv(coeffs_path)
@@ -197,10 +197,9 @@ function bound_ricci_from_below(coeffs_path::AbstractString,
 end
 
 function main()
-    setprecision(BigFloat, 100)
-    # bound_ricci_subdivision_local(U0_PATH, 10, 4)
-    # bound_ricci_from_below(U0_PATH, 10, 4)
-    bound_ricci_from_below(U0_PATH, 30, 20)
+    setprecision(BigFloat, 256)
+    bound_ricci_subdivision_local(U0_PATH)
+    bound_ricci_from_below(U0_PATH)
 end
 if abspath(PROGRAM_FILE) == @__FILE__
     main()

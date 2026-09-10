@@ -14,8 +14,8 @@ Bound the `C^0` norm of the Riemann tensor using truncated local subdivision.
 """
 function bound_riem_subdivision_local(
     coeffs_path::AbstractString,
-    pdeg::Integer,
-    num_subdivisions::Integer;
+    pdeg::Integer = 20,
+    num_subdivisions::Integer = 8;
 )
     println("Step 1: Load u0")
     step1 = load_rational_coeffs_csv(coeffs_path)
@@ -85,8 +85,8 @@ Bound the `C^0` norm of the cov Riemann tensor using truncated local subdivision
 """
 function bound_cov_riem_subdivision_local(
     coeffs_path::AbstractString,
-    pdeg::Integer,
-    num_subdivisions::Integer;
+    pdeg::Integer = 20,
+    num_subdivisions::Integer = 8;
 )
     println("Step 1: Load u0")
     step1 = load_rational_coeffs_csv(coeffs_path)
@@ -156,8 +156,8 @@ Bound the `C^0` norm of the cov Riemann tensor using truncated local subdivision
 """
 function bound_cov_cov_riem_subdivision_local(
     coeffs_path::AbstractString,
-    pdeg::Integer,
-    num_subdivisions::Integer;
+    pdeg::Integer = 20,
+    num_subdivisions::Integer = 8;
 )
     println("Step 1: Load u0")
     step1 = load_rational_coeffs_csv(coeffs_path)
@@ -223,8 +223,10 @@ function bound_cov_cov_riem_subdivision_local(
 end
 
 function main()
-    setprecision(BigFloat, 100)
-    bound_cov_cov_riem_subdivision_local(U0_PATH, 10, 4)
+    setprecision(BigFloat, 256)
+    bound_riem_subdivision_local(U0_PATH)
+    bound_cov_riem_subdivision_local(U0_PATH)
+    bound_cov_cov_riem_subdivision_local(U0_PATH)
 end
 if abspath(PROGRAM_FILE) == @__FILE__
     main()

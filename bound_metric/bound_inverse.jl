@@ -11,8 +11,8 @@ include(joinpath(@__DIR__, "util", "inverse_subdivision_bounds.jl"))
 
 function subdivide_and_bound_rigorous_local(
     coeffs_path::AbstractString,
-    pdeg::Integer,
-    num_subdivisions::Integer,
+    pdeg::Integer = 20,
+    num_subdivisions::Integer = 8,
 )
     println("Step 1: Load u0")
     step1 = load_rational_coeffs_csv(coeffs_path)
@@ -85,8 +85,8 @@ function subdivide_and_bound_rigorous_local(
 end
 
 function main()
-    setprecision(BigFloat, 100)
-    subdivide_and_bound_rigorous_local(U0_PATH, 20, 8);
+    setprecision(BigFloat, 256)
+    subdivide_and_bound_rigorous_local(U0_PATH);
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

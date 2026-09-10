@@ -1,9 +1,9 @@
-function truncated_coeff_enclosure(coeffs::AbstractMatrix{<:Number}, pdeg::Integer)
+function truncated_coeff_enclosure(coeffs::AbstractMatrix{<:Number}, pdeg::Integer = 20)
     trunc = truncate_coeffs_with_tail(coeffs, pdeg)
     return (; coeffs = trunc.coeffs, tail = trunc.tail, pdeg = trunc.pdeg)
 end
 
-function truncate_enclosure_coeffs(coeffs::AbstractMatrix{<:Number}, tail, pdeg::Integer)
+function truncate_enclosure_coeffs(coeffs::AbstractMatrix{<:Number}, tail, pdeg::Integer = 20)
     trunc = truncate_coeffs_with_tail(coeffs, pdeg)
     
     old_tail = abs(tail)
@@ -20,11 +20,11 @@ coefficient arrays are added, the existing tail bounds are summed, and the
 result is truncated again to `pdeg`, with any newly discarded coefficients added
 to the returned tail.
 """
-function enclosure_add(f, g, pdeg::Integer)
+function enclosure_add(f, g, pdeg::Integer = 20)
     return truncate_enclosure_coeffs(cheb_add(f.coeffs, g.coeffs), f.tail + g.tail, pdeg)
 end
 
-function enclosure_sub(f, g, pdeg::Integer)
+function enclosure_sub(f, g, pdeg::Integer = 20)
     return truncate_enclosure_coeffs(cheb_sub(f.coeffs, g.coeffs), f.tail + g.tail, pdeg)
 end
 
@@ -36,7 +36,7 @@ scaled by `c`, while the tail bound is scaled by `abs(c)` (or the supremum of
 `abs(c)` when `c` is an interval). The result is truncated again to `pdeg`,
 adding any newly discarded coefficient mass to the returned tail.
 """
-function enclosure_scale(f, c, pdeg::Integer)
+function enclosure_scale(f, c, pdeg::Integer = 20)
     c_abs = interval(sup(abs(c))) 
     return truncate_enclosure_coeffs(cheb_scale(f.coeffs, c), c_abs * f.tail, pdeg)
 end
@@ -54,7 +54,7 @@ The product is then truncated to `pdeg`, adding the new truncation tail to the
 returned enclosure. If `progress` is supplied, it is advanced after the retained
 coefficient multiplication.
 """
-function enclosure_mul(f, g, pdeg::Integer; progress = nothing)
+function enclosure_mul(f, g, pdeg::Integer = 20; progress = nothing)
     product_coeffs = cheb_mul_fast(f.coeffs, g.coeffs)
     advance_progress!(progress)
     g_coeffs_interval = intervalize_coefficients(g.coeffs)
@@ -202,7 +202,7 @@ function formal_term_to_enclosure(
     D_coeffs::AbstractMatrix,
     A_cache::Dict{Tuple, Any},
     D_cache::Dict{Tuple, Any};
-    pdeg::Integer,
+    pdeg::Integer = 20,
     progress = nothing,
 )
     A_I = cached_exact_derivative!(A_cache, A_coeffs, t.A_I)
@@ -239,7 +239,7 @@ function quotient_derivative_numerator_enclosure(
     A_coeffs::AbstractMatrix,
     D_coeffs::AbstractMatrix,
     I;
-    pdeg::Integer,
+    pdeg::Integer = 20,
     progress = nothing,
 )
     terms = quotient_numerator_formal_terms(I)
@@ -293,7 +293,7 @@ inverse metric entry, so `(1, 2)` and `(2, 1)` both use `inverse_coeffs.A12`.
 function compute_inverse_derivative_numerator_pack(
     inverse_coeffs;
     k::Integer,
-    pdeg::Integer,
+    pdeg::Integer = 20,
     progress = nothing,
 )
     k >= 0 || error("Maximum derivative order k must be >= 0")
@@ -354,7 +354,7 @@ Therefore `ricci_norm_squared_num / D^6` encloses `||Ric||^2`.
 """
 function compute_ricci_numerators_truncated_coefficient_space(
     inverse_coeffs;
-    pdeg::Integer,
+    pdeg::Integer = 20,
     progress = nothing,
 )
     pdeg > 0 || error("Truncated Ricci numerator construction requires pdeg > 0")
@@ -490,7 +490,7 @@ the corresponding denominator is `D^9`.
 """
 function compute_cov_riem_norm_squared_numerator_coeff_space(
     deriv_enc;
-    pdeg::Integer,
+    pdeg::Integer = 20,
     progress = nothing,
 )
     u(i, j) = deriv_enc[(i, j, (0, 0))]
@@ -543,7 +543,7 @@ the corresponding denominator is `D^12`.
 """
 function compute_cov_cov_riem_norm_squared_numerator_coeff_space(
     deriv_enc;
-    pdeg::Integer,
+    pdeg::Integer = 20,
     progress = nothing,
 )
     u(i, j) = deriv_enc[(i, j, (0, 0))]
@@ -668,7 +668,7 @@ coefficient space. Thus
 """
 function compute_riem_numerators_truncated_coeff_space(
     inverse_coeffs;
-    pdeg::Integer,
+    pdeg::Integer = 20,
     progress = nothing,
 )
     pdeg > 0 || error("Truncated Riemann numerator construction requires pdeg > 0")
@@ -911,7 +911,7 @@ function compute_ricci_bound_by_local_subdivision_truncated(
     )
 end
 
-function zero_enclosure(pdeg::Integer)
+function zero_enclosure(pdeg::Integer = 20)
     return truncated_coeff_enclosure(cheb_constant(interval_constant(0)), pdeg)
 end
 
@@ -936,7 +936,7 @@ after rigorous local interval evaluation.
 """
 function compute_ricci_minus_identity_numerator_truncated_coefficient_space(
     inverse_coeffs;
-    pdeg::Integer,
+    pdeg::Integer = 20,
     progress = nothing,
 )
     pdeg > 0 || error("Truncated Ricci lower-bound construction requires pdeg > 0")

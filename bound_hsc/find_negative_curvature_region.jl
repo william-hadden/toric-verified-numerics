@@ -19,7 +19,7 @@ function find_U_V_proposition_negative_hsc_at_point(
     coeffs_path::AbstractString;
     eta,
     rho,
-    pdeg::Integer = 30,
+    pdeg::Integer = 20,
     domain::PolytopeBox = PolytopeBox(0, 1, 0, 1),
 )
     println("Step 1: Load u0")
@@ -337,7 +337,7 @@ function set_eta_rho()
 end
 
 function main()
-    setprecision(BigFloat, 200) 
+    setprecision(BigFloat, 256) 
     eta, rho = set_eta_rho()
     println("Find valid U,V with eta: $eta, rho: $rho")
     find_U_V_proposition_negative_hsc_at_point(U0_PATH; eta, rho)

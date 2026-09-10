@@ -42,7 +42,7 @@ end
 Run the default residual-bound computation from the command line.
 """
 function main()
-    setprecision(BigFloat, 200)
+    setprecision(BigFloat, 256)
     IntervalArithmetic.configure(; matmul = :slow)
     compute_bound_residual(U0_PATH; pdeg = 240)
 end

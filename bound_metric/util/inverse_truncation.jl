@@ -1,4 +1,4 @@
-function prepare_inverse_coeffs_for_subdivision(inverse_coeffs, pdeg::Integer)
+function prepare_inverse_coeffs_for_subdivision(inverse_coeffs, pdeg::Integer = 20)
     return (;
         A11 = truncate_coeffs_with_tail(inverse_coeffs.A11, pdeg),
         A12 = truncate_coeffs_with_tail(inverse_coeffs.A12, pdeg),
