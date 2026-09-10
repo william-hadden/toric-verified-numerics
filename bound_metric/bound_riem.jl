@@ -5,7 +5,6 @@ global_logger(NullLogger())
 
 include(joinpath(@__DIR__, "..", "utils", "load_common.jl"))
 include(joinpath(@__DIR__, "util", "inverse_coefficients.jl"))
-include(joinpath(@__DIR__, "util", "inverse_bounds.jl"))
 include(joinpath(@__DIR__, "util", "inverse_truncation.jl"))
 include(joinpath(@__DIR__, "util", "inverse_subdivision_bounds.jl"))
 include(joinpath(@__DIR__, "util", "curvature_bounds.jl"))

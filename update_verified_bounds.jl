@@ -6,7 +6,6 @@ global_logger(NullLogger())
 include(joinpath(@__DIR__, "utils", "load_common.jl"))
 include(joinpath(@__DIR__, "bound_residual", "util", "problem.jl"))
 include(joinpath(@__DIR__, "bound_metric", "util", "inverse_coefficients.jl"))
-include(joinpath(@__DIR__, "bound_metric", "util", "inverse_bounds.jl"))
 include(joinpath(@__DIR__, "bound_metric", "util", "inverse_truncation.jl"))
 include(joinpath(@__DIR__, "bound_metric", "util", "inverse_subdivision_bounds.jl"))
 include(joinpath(@__DIR__, "bound_metric", "util", "curvature_bounds.jl"))
@@ -58,7 +57,14 @@ function bound_inverse_derivatives_by_local_subdivision(
     ny::Integer = nx,
     progress = nothing,
 )
-    trunc = prepare_inverse_deriv_coeffs_for_subdivision(inverse_derivative_coeffs, pdeg)
+    deriv_num = Dict{Tuple{Int, Int, Tuple{Int, Int}}, Any}()
+    for (key, coeffs) in inverse_derivative_coeffs.deriv_num
+        deriv_num[key] = truncate_coeffs_with_tail(coeffs, pdeg)
+    end
+    trunc = (;
+        deriv_num,
+        D = truncate_coeffs_with_tail(inverse_derivative_coeffs.D, pdeg),
+    )
     xboxes = subdivide_minus_one_one(nx)
     yboxes = subdivide_minus_one_one(ny)
 

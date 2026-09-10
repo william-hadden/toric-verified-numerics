@@ -19,39 +19,29 @@ struct PolytopeBox
     end
 end
 
-function box_area_interval(B::PolytopeBox)
-    area = (B.xhi - B.xlo) * (B.yhi - B.ylo)
-    return exact_big_interval(area)
-end
-
-function split_box(B::PolytopeBox)
-    half = big(1) // big(2)
-    xm = (B.xlo + B.xhi) * half
-    ym = (B.ylo + B.yhi) * half
-
-    return PolytopeBox[
-        PolytopeBox(B.xlo, xm, B.ylo, ym),
-        PolytopeBox(xm, B.xhi, B.ylo, ym),
-        PolytopeBox(B.xlo, xm, ym, B.yhi),
-        PolytopeBox(xm, B.xhi, ym, B.yhi),
-    ]
-end
-
 function refine_boxes(boxes::AbstractVector{PolytopeBox})
-    return mapreduce(split_box, vcat, boxes; init=PolytopeBox[])
+    refined = PolytopeBox[]
+    half = big(1) // big(2)
+    for B in boxes
+        xm = (B.xlo + B.xhi) * half
+        ym = (B.ylo + B.yhi) * half
+        append!(refined, (
+            PolytopeBox(B.xlo, xm, B.ylo, ym),
+            PolytopeBox(xm, B.xhi, B.ylo, ym),
+            PolytopeBox(B.xlo, xm, ym, B.yhi),
+            PolytopeBox(xm, B.xhi, ym, B.yhi),
+        ))
+    end
+    return refined
 end
 
 function evaluate_geometry_on_box(derivatives, X, Y)
     require_guaranteed((X, Y), "HSC box coordinates")
-    D_time = @elapsed begin
     D = evaluate_hsc_coeffs_on_box(
         derivatives.D,
         X,
         Y,
     )
-    end
-
-    # println("D evaluation took $D_time seconds, value was $D")
 
     # Division is only rigorous if D is bounded away from zero.
     require_guaranteed(D, "inverse-metric denominator")
@@ -97,11 +87,6 @@ function evaluate_hsc_coeffs_on_box(coeffs, X, Y)
     TX = exact(2) * X - exact(1)
     TY = exact(1) - exact(2) * Y
     return local_coeff_sum_centered_enclosure_cheb_2d(coeffs, TX, TY)
-end
-
-function cheb_coeff_sum(terms)
-    isempty(terms) && return cheb_constant(interval_constant(0))
-    return foldl(cheb_add, terms)
 end
 
 function hsc_enclosure_sum(terms, pdeg::Integer)
@@ -286,21 +271,7 @@ function compute_Q_rigorously(geometry, ξ, X, Y)
 end
 
 
-"""
-Enclose |Riem₁|² on a box using Corollary A.19:
-    |Riem₁|² = Σ u^{ab}_{cd} u^{cd}_{ab}.
-"""
-function riem_sq_range(geometry)
-    d2uinv = geometry.d2uinv
-
-    R2 = sum(
-        d2uinv[a, b, c, d] * d2uinv[c, d, a, b]
-        for a in 1:2, b in 1:2,
-            c in 1:2, d in 1:2
-    )
-    return require_guaranteed(R2, "squared Riemann norm")
-end
-
+"""Enclose `Q₁(V)` and `|Riem₁|²` on a polytope box."""
 function curvature_ranges_on_box(derivatives, ξ, B::PolytopeBox; prepared = nothing)
     prepared === nothing || return compact_curvature_ranges_on_box(prepared, B)
 
@@ -311,7 +282,13 @@ function curvature_ranges_on_box(derivatives, ξ, B::PolytopeBox; prepared = not
     Q = compute_Q_rigorously(geometry, ξ, X, Y)
     Q === nothing && return nothing
 
-    R2 = riem_sq_range(geometry)
+    R2 = require_guaranteed(
+        sum(
+            geometry.d2uinv[a, b, c, d] * geometry.d2uinv[c, d, a, b]
+            for a in 1:2, b in 1:2, c in 1:2, d in 1:2
+        ),
+        "squared Riemann norm",
+    )
 
     return (; Q, R2)
 end
@@ -429,7 +406,7 @@ function bound_proposition_5_6_margin(
             )
         end
 
-        area = box_area_interval(B)
+        area = exact_big_interval((B.xhi - B.xlo) * (B.yhi - B.ylo))
 
         Q_base_integral += area * ranges.Q
         R2_base_integral += area * ranges.R2
@@ -490,61 +467,6 @@ function bound_proposition_5_6_margin(
         correction = correction,
         rhs = -correction,
         boxes = length(boxes),
-    )
-end
-
-"""
-Try to certify one fixed base region and direction by repeatedly
-subdividing its boxes.
-"""
-function certify_proposition_5_6_candidate(
-    derivatives,
-    initial_boxes::AbstractVector{PolytopeBox},
-    ξ,
-    eta,
-    rho;
-    maxdepth::Integer = 8,
-    progress = nothing,
-)
-    boxes = copy(initial_boxes)
-    last_result = nothing
-
-    for depth in 0:maxdepth
-        result = bound_proposition_5_6_margin(
-            derivatives,
-            boxes,
-            ξ,
-            eta,
-            rho,
-        )
-
-        last_result = result
-
-        if result.valid && result.certified
-            return merge(
-                result,
-                (
-                    depth = depth,
-                    ξ = ξ,
-                    region = boxes,
-                ),
-            )
-        end
-
-        depth == maxdepth && break
-
-        # Uniform refinement is the simplest correct first version.
-        # It can later be replaced by refinement of only the worst boxes.
-        boxes = refine_boxes(boxes)
-    end
-
-    return merge(
-        last_result,
-        (
-            depth = maxdepth,
-            ξ = ξ,
-            region = boxes,
-        ),
     )
 end
 
