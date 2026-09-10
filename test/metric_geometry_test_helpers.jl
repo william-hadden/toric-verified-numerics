@@ -42,7 +42,11 @@ function write_small_metric_coeffs_csv()
     path = tempname() * ".csv"
     open(path, "w") do io
         for i in axes(coeffs, 1)
-            println(io, join(string.(coeffs[i, :]), ","))
+            entries = map(coeffs[i, :]) do coefficient
+                rational = Rational{BigInt}(coefficient)
+                string(numerator(rational), '/', denominator(rational))
+            end
+            println(io, join(entries, ","))
         end
     end
     return path

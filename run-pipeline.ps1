@@ -8,12 +8,17 @@ $scripts = @(
     "bound_metric/bound_ricci.jl"
     "bound_residual/bound_residual.jl"
     "eigenvalues/orchestrate.jl"
+    "eigenvalues/verify_eigenvalue.m"
+    "eigenvalues/update_bound.jl"
     "apply_fixed_point/apply_fixed_point.jl"
     "bound_hsc/find_negative_curvature_region.jl"
     "bound_hsc/verify_proposition_5_6.jl"
     "eigenvalue_comparison/upper_bound.jl"
     "eigenvalue_comparison/eigenvalue_for_true_KE_metric.jl"
 )
+
+# Check both runtimes before starting the long numerical calculations.
+Get-Command julia, matlab -ErrorAction Stop | Out-Null
 
 $timingFile = Join-Path $PWD (
     "pipeline_timings_{0}.csv" -f (Get-Date -Format "yyyyMMdd_HHmmss")
@@ -32,7 +37,12 @@ try {
         $timer = [System.Diagnostics.Stopwatch]::StartNew()
 
         try {
-            & julia --project=. $script
+            if ([System.IO.Path]::GetExtension($script) -eq ".m") {
+                & matlab -batch "run('$script')"
+            }
+            else {
+                & julia --project=. $script
+            }
             if ($LASTEXITCODE -ne 0) {
                 throw "$script failed with exit code $LASTEXITCODE"
             }

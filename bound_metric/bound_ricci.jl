@@ -196,10 +196,15 @@ function bound_ricci_from_below(coeffs_path::AbstractString,
     return global_step5.ricci_lower_bound
 end
 
-function main()
+function main(; coeffs_path::AbstractString = U0_PATH, pdeg::Integer = 20,
+    num_subdivisions::Integer = 8, lower_num_subdivisions::Integer = 30,
+    output_path::AbstractString = VERIFIED_BOUNDS_PATH)
     setprecision(BigFloat, 256)
-    bound_ricci_subdivision_local(U0_PATH)
-    bound_ricci_from_below(U0_PATH)
+    ricci = bound_ricci_subdivision_local(coeffs_path, pdeg, num_subdivisions)
+    write_bound_entry("curvature_bounds", "ricci_C0", ricci.step5.ricci_norm_bound; path = output_path)
+    ricci_lower_bound = bound_ricci_from_below(coeffs_path, pdeg, lower_num_subdivisions)
+    write_bound_entry("curvature_bounds", "ricci_lower_bound", ricci_lower_bound;
+        path = output_path, rounding = RoundDown)
 end
 if abspath(PROGRAM_FILE) == @__FILE__
     main()

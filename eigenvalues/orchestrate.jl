@@ -61,7 +61,7 @@ function run_orchestration()
         bounds_path = normpath(
             joinpath(@__DIR__, "..", "data", "verified_bounds.json"),
         )
-        bounds = JSON.parsefile(bounds_path)
+        bounds = read_bounds_json(bounds_path)
         bounds["delta_inset"] = "$(numerator(delta))/$(denominator(delta))"
         bounds["Liu_FEM_comparison_constant"] =
             "$(numerator(liu_constant_target))/$(denominator(liu_constant_target))"

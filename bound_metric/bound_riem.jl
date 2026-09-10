@@ -222,11 +222,15 @@ function bound_cov_cov_riem_subdivision_local(
     )
 end
 
-function main()
+function main(; coeffs_path::AbstractString = U0_PATH, pdeg::Integer = 20,
+    num_subdivisions::Integer = 8, output_path::AbstractString = VERIFIED_BOUNDS_PATH)
     setprecision(BigFloat, 256)
-    bound_riem_subdivision_local(U0_PATH)
-    bound_cov_riem_subdivision_local(U0_PATH)
-    bound_cov_cov_riem_subdivision_local(U0_PATH)
+    riem = bound_riem_subdivision_local(coeffs_path, pdeg, num_subdivisions)
+    write_bound_entry("curvature_bounds", "riemann_C0", riem.step5.riem_norm_bound; path = output_path)
+    cov_riem = bound_cov_riem_subdivision_local(coeffs_path, pdeg, num_subdivisions)
+    write_bound_entry("curvature_bounds", "nabla_riemann_C0", cov_riem.step5.cov_riem_norm_bound; path = output_path)
+    cov_cov_riem = bound_cov_cov_riem_subdivision_local(coeffs_path, pdeg, num_subdivisions)
+    write_bound_entry("curvature_bounds", "nabla2_riemann_C0", cov_cov_riem.step5.cov_cov_riem_norm_bound; path = output_path)
 end
 if abspath(PROGRAM_FILE) == @__FILE__
     main()

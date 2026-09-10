@@ -33,8 +33,7 @@ end
     @test BigFloat("4.83") < transformed <= exact_value
 
     value = BigFloat("0.516807414131973603069171907824031294")
-    decimal_unit = interval(BigFloat(10))^-SERIALIZED_BOUND_DECIMAL_DIGITS
-    text = serialize_bound_value(inf(interval(value) - decimal_unit))
+    text = serialize_bound_value(value; rounding = RoundDown)
     parsed_upper = setrounding(BigFloat, RoundUp) do
         parse(BigFloat, text)
     end

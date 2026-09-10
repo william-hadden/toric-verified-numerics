@@ -67,6 +67,10 @@ if test_filter in ("all", "inverse")
     include(joinpath(@__DIR__, "inverse_tests.jl"))
 end
 
+if test_filter in ("all", "metric_pipeline")
+    include(joinpath(@__DIR__, "metric_pipeline_tests.jl"))
+end
+
 if test_filter in ("all", "eigenvalues")
     include(joinpath(@__DIR__, "eigenvalue_assembly_tests.jl"))
 end

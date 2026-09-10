@@ -124,6 +124,50 @@ function compute_inverse_bound_by_local_subdivision_truncated(
     )
 end
 
+"""Bound inverse metric derivatives using their existing numerator enclosures."""
+function bound_inverse_derivatives_by_local_subdivision(
+    inverse_derivative_coeffs;
+    pdeg::Integer,
+    nx::Integer,
+    ny::Integer = nx,
+    progress = nothing,
+)
+    deriv_num = Dict(key => truncate_coeffs_with_tail(coeffs, pdeg)
+        for (key, coeffs) in inverse_derivative_coeffs.deriv_num)
+    D = truncate_coeffs_with_tail(inverse_derivative_coeffs.D, pdeg)
+    derivative_bounds = Dict(key => BigFloat(0) for key in keys(deriv_num))
+    global_D_lower = big"Inf"
+
+    for xbox in subdivide_minus_one_one(nx), ybox in subdivide_minus_one_one(ny)
+        D_box = local_coeff_sum_centered_enclosure_with_tail(D, xbox, ybox)
+        D_lower = inf(D_box)
+        isfinite(D_lower) && D_lower > 0 || error(
+            "Could not certify positivity of D for inverse derivative bounds: D_box = $D_box",
+        )
+        for (key, numerator) in deriv_num
+            a = key[3]
+            num_box = local_coeff_sum_centered_enclosure_with_tail(numerator, xbox, ybox)
+            derivative_box = num_box / D_box^(sum(a) + 1)
+            derivative_bounds[key] = max(derivative_bounds[key], sup(abs(derivative_box)))
+        end
+        global_D_lower = min(global_D_lower, D_lower)
+        advance_progress!(progress)
+    end
+    return (; derivative_bounds, D_lower = global_D_lower)
+end
+
+"""Arrange inverse derivative bounds in the schema consumed by the residual stage."""
+function metric_inverse_bounds(derivative_bounds)
+    components = ("xx" => (1, 1), "xy" => (1, 2), "yx" => (2, 1), "yy" => (2, 2))
+    entries(a) = Dict(label => derivative_bounds[(i, j, a)] for (label, (i, j)) in components)
+    return (;
+        value = entries((0, 0)),
+        d1 = Dict("x" => entries((1, 0)), "y" => entries((0, 1))),
+        d2 = Dict("xx" => entries((2, 0)), "xy" => entries((1, 1)),
+            "yx" => entries((1, 1)), "yy" => entries((0, 2))),
+    )
+end
+
 function print_truncated_subdivision_inverse_bound_summary(step)
     println()
     println("Rigorous subdivision-certified C^0 bounds for inverse metric entries:")

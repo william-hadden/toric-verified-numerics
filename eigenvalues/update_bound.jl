@@ -75,7 +75,7 @@ function run_bound_update()
         bounds_path = normpath(
             joinpath(@__DIR__, "..", "data", "verified_bounds.json"),
         )
-        bounds = JSON.parsefile(bounds_path)
+        bounds = read_bounds_json(bounds_path)
         delta = parse_rational_interval(bounds["delta_inset"])
         comparison_constant =
             parse_rational_interval(bounds["Liu_FEM_comparison_constant"])
@@ -89,12 +89,11 @@ function run_bound_update()
             delta,
             bounds["curvature_bounds"]["ricci_lower_bound"],
         )
-        decimal_unit = interval(BigFloat(10))^-SERIALIZED_BOUND_DECIMAL_DIGITS
         bounds["lambda_1_delta_lower_bound"] = serialize_bound_value(
-            inf(interval(lambda_inset_lower) - decimal_unit),
+            lambda_inset_lower; rounding = RoundDown,
         )
         bounds["lambda_1_lower_bound"] = serialize_bound_value(
-            inf(interval(lambda_compact_lower) - decimal_unit),
+            lambda_compact_lower; rounding = RoundDown,
         )
         open(bounds_path, "w") do io
             JSON.print(io, bounds, 4)

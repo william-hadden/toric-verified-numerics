@@ -7,12 +7,14 @@ include(joinpath(@__DIR__, "..", "utils", "load_common.jl"))
 include(joinpath(@__DIR__, "util", "inverse_coefficients.jl"))
 include(joinpath(@__DIR__, "util", "inverse_truncation.jl"))
 include(joinpath(@__DIR__, "util", "inverse_subdivision_bounds.jl"))
+include(joinpath(@__DIR__, "util", "curvature_bounds.jl"))
 
 
 function subdivide_and_bound_rigorous_local(
     coeffs_path::AbstractString,
     pdeg::Integer = 20,
-    num_subdivisions::Integer = 8,
+    num_subdivisions::Integer = 8;
+    output_path::Union{Nothing,AbstractString} = nothing,
 )
     println("Step 1: Load u0")
     step1 = load_rational_coeffs_csv(coeffs_path)
@@ -73,11 +75,36 @@ function subdivide_and_bound_rigorous_local(
     end
     println("Step 4 interval calculations guaranteed: $boxes_guaranteed")
 
+    step5_progress = start_progress("Step 5: Inverse derivative numerator products", 120)
+    step5 = compute_inverse_derivative_numerator_components_truncated_coeff_space(
+        step3; k = 2, pdeg, progress = step5_progress,
+    )
+    finish_progress!(step5_progress)
+    step6_progress = start_progress("Step 6: Inverse derivative subdivision boxes", num_subdivisions^2)
+    step6 = bound_inverse_derivatives_by_local_subdivision(
+        step5; pdeg, nx = num_subdivisions, progress = step6_progress,
+    )
+    finish_progress!(step6_progress)
+    metric_inverse = metric_inverse_bounds(step6.derivative_bounds)
+    # Retain the value bounds already certified and printed by Step 4.
+    metric_inverse.value["xx"] = global_step4.u11_bound
+    metric_inverse.value["xy"] = metric_inverse.value["yx"] = global_step4.u12_bound
+    metric_inverse.value["yy"] = global_step4.u22_bound
+    if !isnothing(output_path)
+        for (key, value) in pairs(metric_inverse)
+            write_bound_entry("metric_inverse", String(key), value; path = output_path)
+        end
+        println("Updated metric_inverse bounds: $output_path")
+    end
+
     return (;
         step1,
         step2,
         step3,
         step4 = global_step4,
+        step5,
+        step6,
+        metric_inverse,
         subdivision_time,
         pdeg,
         num_subdivisions,
@@ -86,7 +113,7 @@ end
 
 function main()
     setprecision(BigFloat, 256)
-    subdivide_and_bound_rigorous_local(U0_PATH);
+    subdivide_and_bound_rigorous_local(U0_PATH; output_path = VERIFIED_BOUNDS_PATH)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
