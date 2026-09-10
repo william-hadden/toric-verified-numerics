@@ -85,4 +85,3 @@ julia --project=. test/runtests.jl utils
 - create an updated full dependencies file
 - Explain how to run this package step by step with rough times / compute needed for each step
 - Is the google drive where we want to store the data publically? If not decide on where this data is stored and explain here where to find and download it.
-- Fill in license file
