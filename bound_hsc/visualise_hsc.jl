@@ -19,8 +19,8 @@ using PlotlyJS
 
 include(joinpath(@__DIR__, "verify_proposition_5_6.jl"))
 
-const DEFAULT_PLOT_GRID = 122
-const DEFAULT_PADDING_CELLS = 3
+const DEFAULT_PLOT_GRID = 224
+const DEFAULT_PADDING_CELLS = 10
 const COLOUR_SOFTENING = 1
 
 format_direction_component(value::Rational) = denominator(value) == 1 ?
