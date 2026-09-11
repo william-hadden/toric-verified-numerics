@@ -89,11 +89,12 @@ function run_bound_update()
             delta,
             bounds["curvature_bounds"]["ricci_lower_bound"],
         )
+        decimal_unit = interval(BigFloat(10))^-SERIALIZED_BOUND_DECIMAL_DIGITS
         bounds["lambda_1_delta_lower_bound"] = serialize_bound_value(
-            lambda_inset_lower; rounding = RoundDown,
+            inf(interval(lambda_inset_lower) - decimal_unit),
         )
         bounds["lambda_1_lower_bound"] = serialize_bound_value(
-            lambda_compact_lower; rounding = RoundDown,
+            inf(interval(lambda_compact_lower) - decimal_unit),
         )
         open(bounds_path, "w") do io
             JSON.print(io, bounds, 4)

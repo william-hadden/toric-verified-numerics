@@ -47,7 +47,7 @@ function bound_riem_subdivision_local(
     step4_progress = start_progress("Step 4: Riemmanian numerator products", 136)
     step4 = compute_riem_numerators_truncated_coeff_space(step3; progress = step4_progress, pdeg)
     finish_progress!(step4_progress)
-    println("Step 4: Build Ricci numerator coefficient arrays ... ok")
+    println("Step 4: Build Riemmanian numerator coefficient arrays ... ok")
     
     println("Step 5: Starting local Riem subdivision bounds ...")
     step5_progress = start_progress("Step 5: Riem subdivision boxes", num_subdivisions * num_subdivisions)
@@ -226,11 +226,11 @@ function main(; coeffs_path::AbstractString = U0_PATH, pdeg::Integer = 20,
     num_subdivisions::Integer = 8, output_path::AbstractString = VERIFIED_BOUNDS_PATH)
     setprecision(BigFloat, 256)
     riem = bound_riem_subdivision_local(coeffs_path, pdeg, num_subdivisions)
-    write_bound_entry("curvature_bounds", "riemann_C0", riem.step5.riem_norm_bound; path = output_path)
+    write_bound_entry("curvature_bounds", "riemann_C0", riem.step5.riem_norm_bound; path = output_path, rounding = RoundUp)
     cov_riem = bound_cov_riem_subdivision_local(coeffs_path, pdeg, num_subdivisions)
-    write_bound_entry("curvature_bounds", "nabla_riemann_C0", cov_riem.step5.cov_riem_norm_bound; path = output_path)
+    write_bound_entry("curvature_bounds", "nabla_riemann_C0", cov_riem.step5.cov_riem_norm_bound; path = output_path, rounding = RoundUp)
     cov_cov_riem = bound_cov_cov_riem_subdivision_local(coeffs_path, pdeg, num_subdivisions)
-    write_bound_entry("curvature_bounds", "nabla2_riemann_C0", cov_cov_riem.step5.cov_cov_riem_norm_bound; path = output_path)
+    write_bound_entry("curvature_bounds", "nabla2_riemann_C0", cov_cov_riem.step5.cov_cov_riem_norm_bound; path = output_path, rounding = RoundUp)
 end
 if abspath(PROGRAM_FILE) == @__FILE__
     main()

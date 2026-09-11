@@ -95,33 +95,43 @@ end
 
 const SERIALIZED_BOUND_DECIMAL_DIGITS = 77
 
-"""Serialize a bound with directed rounding to 77 decimal places."""
-function serialize_bound_value(bound::BigFloat; rounding::RoundingMode = RoundUp)
+"""
+Serialize a value to 77 decimal places, with nearest rounding by default.
+Use `RoundUp` for a certified upper bound or `RoundDown` for a lower bound.
+"""
+function serialize_bound_value(bound::BigFloat; rounding::RoundingMode = RoundNearest)
     isfinite(bound) || throw(ArgumentError("Cannot serialize a nonfinite bound: $bound"))
-    # Quantize the exact binary value using integers: floating-point formatting
-    # rounds to nearest and can weaken a certified upper or lower bound.
+    # Julia 1.12 converts BigFloat to Rational via ldexp at the active
+    # precision. Preserve the endpoint's precision so that conversion is
+    # exact even when the caller has since reduced the active precision.
+    exact_bound = setprecision(BigFloat, max(precision(BigFloat), precision(bound))) do
+        Rational{BigInt}(bound)
+    end
+    # All subsequent operations are exact integer/rational arithmetic. With
+    # RoundUp this writes ceil(10^77 * bound) / 10^77; RoundDown uses floor.
     scale = big(10)^SERIALIZED_BOUND_DECIMAL_DIGITS
-    units = round(BigInt, Rational{BigInt}(bound) * scale, rounding)
+    units = round(BigInt, exact_bound * scale, rounding)
     whole, fraction = divrem(abs(units), scale)
     return string(units < 0 ? "-" : "", whole, ".",
         lpad(string(fraction), SERIALIZED_BOUND_DECIMAL_DIGITS, '0'))
 end
 
-serialize_bound_value(bound::Interval; rounding::RoundingMode = RoundUp) =
+serialize_bound_value(bound::Interval; rounding::RoundingMode = RoundNearest) =
     serialize_bound_value(rounding == RoundDown ? inf(bound) : sup(bound); rounding)
-serialize_bound_value(bound::Real; rounding::RoundingMode = RoundUp) =
+serialize_bound_value(bound::Real; rounding::RoundingMode = RoundNearest) =
     serialize_bound_value(BigFloat(bound, rounding); rounding)
-serialize_bound_value(bounds::NamedTuple; rounding::RoundingMode = RoundUp) =
+serialize_bound_value(bounds::NamedTuple; rounding::RoundingMode = RoundNearest) =
     Dict(String(key) => serialize_bound_value(value; rounding) for (key, value) in pairs(bounds))
-serialize_bound_value(bounds::AbstractDict; rounding::RoundingMode = RoundUp) =
+serialize_bound_value(bounds::AbstractDict; rounding::RoundingMode = RoundNearest) =
     Dict(String(key) => serialize_bound_value(value; rounding) for (key, value) in bounds)
 
 """
-Write one entry into a top-level bound dictionary. Upper bounds round up;
-pass `rounding = RoundDown` for a lower bound.
+Write one entry into a top-level bound dictionary using nearest rounding by
+default. Pass `rounding = RoundUp` or `RoundDown` to preserve an upper or lower
+bound without adding decimal padding at the call site.
 """
 function write_bound_entry(group_key::AbstractString, value_key::AbstractString, value;
-    path::AbstractString = VERIFIED_BOUNDS_PATH, rounding::RoundingMode = RoundUp)
+    path::AbstractString = VERIFIED_BOUNDS_PATH, rounding::RoundingMode = RoundNearest)
     bounds = isfile(path) ? read_bounds_json(path) : Dict{String,Any}()
     group = get!(bounds, group_key) do
         Dict{String,Any}()
@@ -139,5 +149,5 @@ function write_bound_entry(group_key::AbstractString, value_key::AbstractString,
 end
 
 write_bound_entry(group_key::Symbol, value_key::Symbol, value;
-    path::AbstractString = VERIFIED_BOUNDS_PATH, rounding::RoundingMode = RoundUp) =
+    path::AbstractString = VERIFIED_BOUNDS_PATH, rounding::RoundingMode = RoundNearest) =
     write_bound_entry(String(group_key), String(value_key), value; path, rounding)

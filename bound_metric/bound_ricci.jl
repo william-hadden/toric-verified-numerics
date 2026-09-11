@@ -201,7 +201,7 @@ function main(; coeffs_path::AbstractString = U0_PATH, pdeg::Integer = 20,
     output_path::AbstractString = VERIFIED_BOUNDS_PATH)
     setprecision(BigFloat, 256)
     ricci = bound_ricci_subdivision_local(coeffs_path, pdeg, num_subdivisions)
-    write_bound_entry("curvature_bounds", "ricci_C0", ricci.step5.ricci_norm_bound; path = output_path)
+    write_bound_entry("curvature_bounds", "ricci_C0", ricci.step5.ricci_norm_bound; path = output_path, rounding = RoundUp)
     ricci_lower_bound = bound_ricci_from_below(coeffs_path, pdeg, lower_num_subdivisions)
     write_bound_entry("curvature_bounds", "ricci_lower_bound", ricci_lower_bound;
         path = output_path, rounding = RoundDown)

@@ -321,18 +321,22 @@ end
 """
 can use lemma 5.1 and lemma 5.3 to set these 
 """
-function set_eta_rho()
-    epsilon = read_bound("fixed_point_bounds")["contraction_radius_upper_bound"] 
+function set_eta_rho(; path::AbstractString = VERIFIED_BOUNDS_PATH)
+    epsilon = read_bound("fixed_point_bounds"; path)["contraction_radius_upper_bound"]
+    require_guaranteed(epsilon, "fixed-point radius bound")
+    inf(epsilon) >= 0 || throw(DomainError(epsilon, "The radius bound must be nonnegative"))
 
-    const_emb_C1, const_emb_C2, const_emb_C3, const_emb_C4 = get_sobolev_multiplication_constants()
-    C_1 = 4 * const_emb_C4 * const_emb_C3 * const_emb_C2 * const_emb_C1
+    const_emb_C1, const_emb_C2, const_emb_C3, const_emb_C4 = get_sobolev_multiplication_constants(; path)
+    C_1 = exact(4) * const_emb_C4 * const_emb_C3 * const_emb_C2 * const_emb_C1
     eta = C_1 * epsilon
 
-    eta < 1 ||
-    throw(DomainError(C_1 * epsilon, "C_1 * epsilon must be less than 1"))
+    sup(eta) < 1 ||
+        throw(DomainError(eta, "C_1 * epsilon must be less than 1"))
 
-    rho = epsilon/(interval(1)-C_1*epsilon) +  (const_emb_C1^2*epsilon^2)/(interval(1)-C_1*epsilon)^2
+    denominator = one(eta) - eta
+    rho = epsilon / denominator + (const_emb_C1^2 * epsilon^2) / denominator^2
 
+    require_guaranteed((eta, rho), "HSC perturbation bounds")
     return eta, rho
 end
 

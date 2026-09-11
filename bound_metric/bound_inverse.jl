@@ -92,7 +92,7 @@ function subdivide_and_bound_rigorous_local(
     metric_inverse.value["yy"] = global_step4.u22_bound
     if !isnothing(output_path)
         for (key, value) in pairs(metric_inverse)
-            write_bound_entry("metric_inverse", String(key), value; path = output_path)
+            write_bound_entry("metric_inverse", String(key), value; path = output_path, rounding = RoundUp)
         end
         println("Updated metric_inverse bounds: $output_path")
     end

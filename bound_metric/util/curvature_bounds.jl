@@ -504,22 +504,22 @@ function compute_cov_riem_norm_squared_numerator_coeff_space(
         bracket = enclosure_mul(u(m, n), d3u(i, k, j, l, n), pdeg; progress)
         bracket = enclosure_add(
             bracket,
-            enclosure_mul(d2u(l, k, n, l), du(m, n, j), pdeg; progress),
+            enclosure_mul(d2u(i, k, n, l), du(m, n, j), pdeg; progress),
             pdeg,
         )
         bracket = enclosure_sub(
             bracket,
-            enclosure_mul(d2u(n, k, j, l), du(m, l, n), pdeg; progress),
+            enclosure_mul(d2u(n, k, j, l), du(m, i, n), pdeg; progress),
             pdeg,
         )
         bracket = enclosure_add(
             bracket,
-            enclosure_mul(d2u(l, k, j, n), du(m, n, l), pdeg; progress),
+            enclosure_mul(d2u(i, k, j, n), du(m, n, l), pdeg; progress),
             pdeg,
         )
         bracket = enclosure_sub(
             bracket,
-            enclosure_mul(d2u(l, n, j, l), du(m, k, n), pdeg; progress),
+            enclosure_mul(d2u(i, n, j, l), du(m, k, n), pdeg; progress),
             pdeg,
         )
 

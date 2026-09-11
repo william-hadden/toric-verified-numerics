@@ -73,7 +73,9 @@ function run_upper_bound()
         numerator = enclose_rayleigh_numerator(inverse_coefficients)
         L2_norm_squared = interval(BigFloat, 43 // 720)
         rayleigh = numerator / L2_norm_squared
-        serialized = serialize_bound_value(rayleigh)
+        # Keep nearest-decimal serialization above the interval supremum.
+        decimal_unit = interval(BigFloat(10))^-SERIALIZED_BOUND_DECIMAL_DIGITS
+        serialized = serialize_bound_value(rayleigh + decimal_unit)
 
         bounds = read_bounds_json(VERIFIED_BOUNDS_PATH)
         bounds["lambda_1_upper_bound"] = serialized
