@@ -70,6 +70,21 @@ bound_metric/bound_ricci -> bound_residual/bound_residual
 ->eigenvalues/orchestrate.jl -> apply_fixed_point/apply_fixed_point ->
 bound_hsc/find_negative_curvature_region -> bound_hsc/verify_proposition_5_6 -> eigenvalue_comparison/upper_bound.jl -> eigenvalue_comparison/eigenvalue_for_true_KE_metric
 
+The following powershell command runs the pipeline and keeps the process alive:
+```powershell
+$repo = "<path-to-code>\toric-verified-numerics"
+$stamp = Get-Date -Format "yyyyMMdd_HHmmss"
+
+$p = Start-Process powershell.exe -WindowStyle Hidden -PassThru `
+    -WorkingDirectory $repo `
+    -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File ".\<run-pipeline>.ps1"' `
+    -RedirectStandardOutput "$repo\pipeline_after_orchestrate_$stamp.log" `
+    -RedirectStandardError "$repo\pipeline_after_orchestrate_$stamp.err.log"
+
+$p.Id
+Get-Content "$repo\pipeline_after_orchestrate_$stamp.log" -Wait -Tail 20
+```
+
 ## Tests
 
 Run the full test suite with:

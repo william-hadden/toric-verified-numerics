@@ -179,8 +179,12 @@ function certify_elements(
     liu_constant_threshold = inf(interval(BigFloat, liu_constant_target))
     triangle_count = length(mesh.triangles)
     certificates = Vector{Any}(undef, triangle_count)
+    total_start = time_ns()
+
     for first_index in 1:progress_interval:triangle_count
         last_index = min(first_index + progress_interval - 1, triangle_count)
+        batch_start = time_ns()
+
         Threads.@threads for index in first_index:last_index
             certificates[index] = certify_element(
                 oracle,
@@ -192,7 +196,12 @@ function certify_elements(
                 liu_constant_threshold,
             )
         end
-        println("certified $last_index / $triangle_count elements")
+        batch_seconds = (time_ns() - batch_start) /1e9 
+        total_seconds = (time_ns()- total_start) / 1e9
+        println("certified $last_index / $triangle_count elements, " * 
+                "batch_time: $(round(batch_seconds; digits=2))s, " * 
+                "total time: $(round(total_seconds; digits=2))s, "
+        )
         flush(stdout)
     end
     return certificates
