@@ -156,6 +156,14 @@ function certify_element(oracle, mesh, tri, degree, terms, bisection_steps, liu_
         if liu_constant <= liu_constant_target
             return (; B = bound.B, alpha = bound.alpha, liu_constant)
         end
+
+        beta = minimum(symmetric_eigenvalue_lower_bound(leaf.G) for leaf in bound.leaves)
+        scalar_liu_constant = local_liu_constant(diameter, beta)
+        if scalar_liu_constant <= liu_constant_target
+            return (; B = BigFloat[beta 0; 0 beta],
+                    alpha = beta,
+                    liu_constant = scalar_liu_constant)
+        end
         min_depth += 1
     end
 end
