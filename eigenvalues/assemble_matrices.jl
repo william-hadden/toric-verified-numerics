@@ -91,27 +91,19 @@ that are not a hexagon boundary."""
 sector_reflect_key((a, b)) = (a, -a - b)
 
 """
-Return twice each edge midpoint in exact lattice coordinates.
+Identify actual reflected mesh edges; leave unmatched edges independent.
 
-For edge `(i, j)`, the corresponding result is
-`node_keys[i] + node_keys[j]`. Doubled coordinates avoid half-integers.
-"""
-function edge_midpoint_keys(edges, node_keys)
-    return [
-        (node_keys[i][1] + node_keys[j][1], node_keys[i][2] + node_keys[j][2])
-        for (i, j) in edges
-    ]
-end
-
-"""
-Map each sector CR edge to its D6-invariant degree of freedom.
-
-The smaller of a midpoint key and its reflection is their common orbit key.
+Canonicalize unordered endpoint pairs, since reflected midpoints need not
+belong to reflected edges. The triangulation need not be reflection-invariant.
 """
 function d6_edge_quotient(edges, node_keys)
-    orbit_ids = Dict{Tuple{Int,Int},Int}()
-    return map(edge_midpoint_keys(edges, node_keys)) do midpoint
-        orbit_key = min(midpoint, sector_reflect_key(midpoint))
+    orbit_ids = Dict{Tuple{Tuple{Int,Int},Tuple{Int,Int}},Int}()
+    return map(edges) do edge
+        i, j = edge
+        key = minmax(node_keys[i], node_keys[j])
+        reflected = minmax(sector_reflect_key(node_keys[i]),
+                           sector_reflect_key(node_keys[j]))
+        orbit_key = min(key, reflected)
         get!(orbit_ids, orbit_key, length(orbit_ids) + 1)
     end
 end
@@ -206,7 +198,7 @@ function certify_elements(
     return certificates
 end
 
-"""Assemble the D6-quotient CR mass and certified comparison stiffness matrices."""
+"""Assemble CR mass and certified stiffness matrices with reflected-edge pairing."""
 function assemble_matrices(mesh, certificates)
     length(certificates) == length(mesh.triangles) ||
         throw(DimensionMismatch("Expected one certificate per triangle"))
