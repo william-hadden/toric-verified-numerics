@@ -43,7 +43,7 @@ E=G\,e^H-1.
      \(L^2\), \(H^1\), \(H^2\), and \(H^3\)-type bounds.
 
    The final `main` function sets 200-bit `BigFloat` precision and runs the
-   default calculation with a \(240\times240\) Lobatto grid.
+   default calculation with a \(448\times448\) Lobatto grid.
 
 2. **`util/problem.jl` — mathematical implementation**
 
@@ -104,8 +104,7 @@ julia --project=. bound_residual/bound_residual.jl
 ```
 
 The rational input file is large, and the default interval transforms use a
-\(240\times240\) grid, so this is a substantial verified computation rather
+\(448\times448\) grid, so this is a substantial verified computation rather
 than a quick smoke test.  For programmatic experiments, include the entry-point
 file and call `compute_bound_residual(path; pdeg=...)`; smaller `pdeg` values
 are useful for development but do not reproduce the default certificate.
-

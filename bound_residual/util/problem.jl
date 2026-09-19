@@ -62,7 +62,7 @@ Compute the Chebyshev values of G and H on the grid.
 """
 function step2_compute_GH_values_grid(
     coeffs::AbstractMatrix{<:Number};
-    pdeg::Integer = 240,
+    pdeg::Integer = 448,
     progress = nothing,
 )
     coeffs_pad = cheb_pad(coeffs, pdeg - 1, pdeg - 1)
@@ -108,7 +108,7 @@ Bound the derivatives of the MA equation on the Lobatto grid, using the Chebyshe
 function step3_compute_MA_derivatives(
     H_values::AbstractMatrix{<:Number},
     G_values::AbstractMatrix{<:Number};
-    pdeg::Integer = 240,
+    pdeg::Integer = 448,
     progress = nothing,
 )
     H_coeffs = cheb_lobatto_values_to_coeffs_2d(H_values)

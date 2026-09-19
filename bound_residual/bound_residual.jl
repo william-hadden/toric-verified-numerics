@@ -3,7 +3,7 @@ using IntervalArithmetic
 include(joinpath(@__DIR__, "..", "utils", "load_common.jl"))
 include(joinpath(@__DIR__, "util", "problem.jl"))
 
-function compute_bound_residual(coeffs_path::AbstractString; pdeg::Integer=240)
+function compute_bound_residual(coeffs_path::AbstractString; pdeg::Integer=448)
     println("Step 1: Load u0 and normalize u0")
     step1 = step1_load_and_normalize_u0(coeffs_path)
     println("Step 1: Load and normalize u0 ... ok")
@@ -44,7 +44,7 @@ Run the default residual-bound computation from the command line.
 function main()
     setprecision(BigFloat, 256)
     IntervalArithmetic.configure(; matmul = :slow)
-    compute_bound_residual(U0_PATH; pdeg = 240)
+    compute_bound_residual(U0_PATH; pdeg = 448)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
