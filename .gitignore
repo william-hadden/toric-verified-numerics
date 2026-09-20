@@ -6,4 +6,6 @@ data/happrox/coeffs-rational.csv
 eigenvalues/INTLAB/Intlab_V14.1/
 eigenvalues/mass_matrix.mat
 eigenvalues/stiff_matrix.mat
+eigenvalues/checkpoints/
 bound_hsc/checkpoints/
+cert_chkpt/
