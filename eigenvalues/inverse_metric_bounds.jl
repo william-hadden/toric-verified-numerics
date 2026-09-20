@@ -199,6 +199,29 @@ function inverse_metric_lower_bound(
     bisection_steps,
 )
     leaves = metric_cover(oracle, nodes, tri, min_depth, degree, terms)
+
+    if min_depth >= 5
+        lambda = minimum(symmetric_eigenvalue_lower_bound(leaf.G) for leaf in leaves)
+        lambda > 0 || error("The identity lower matrix is not positive definite on triangle $tri")
+
+        # Use a tiny strict shrink so the residual check can prove G - B > 0.
+        lambda = prevfloat(lambda)
+
+        B = [
+            lambda        zero(lambda)
+            zero(lambda) lambda
+        ]
+
+        alpha = symmetric_eigenvalue_lower_bound(interval.(B))
+        alpha > 0 || error("The identity lower matrix has nonpositive alpha")
+
+        residuals = residual_eigenvalue_lower_bounds(leaves, B)
+        all(bound -> bound > 0, residuals) ||
+            error("The identity lower matrix failed leaf-wise recertification")
+
+        return (; B, alpha, leaves)
+    end
+
     midpoint = midpoint_matrix(metric_matrix_hull(leaves))
     symmetric_eigenvalue_lower_bound(interval.(midpoint)) > 0 ||
         error("The metric-cover midpoint is not positive definite on triangle $tri")

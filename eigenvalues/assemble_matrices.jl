@@ -183,8 +183,9 @@ function certify_elements(
 
     for first_index in 1:progress_interval:triangle_count
         last_index = min(first_index + progress_interval - 1, triangle_count)
+        filename = joinpath(REPO_ROOT, "cert_chkpt", "certificate_B_$(first_index)_$(last_index).jsonl")
+        mkpath(dirname(filename))
         batch_start = time_ns()
-
         Threads.@threads for index in first_index:last_index
             certificates[index] = certify_element(
                 oracle,
@@ -195,7 +196,20 @@ function certify_elements(
                 bisection_steps,
                 liu_constant_threshold,
             )
+            end
+        
+        open(filename, "w") do io
+            for index in first_index:last_index
+                B = certificates[index].B
+                serialized_B = [
+                    serialize_bound_value(B[i, j]; rounding = RoundDown)
+                    for i in axes(B, 1), j in axes(B, 2)
+                ]
+                JSON.print(io, Dict("index" => index, "B" => serialized_B))
+                println(io)
+            end
         end
+
         batch_seconds = (time_ns() - batch_start) /1e9 
         total_seconds = (time_ns()- total_start) / 1e9
         println("certified $last_index / $triangle_count elements, " * 
