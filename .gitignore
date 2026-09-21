@@ -7,3 +7,6 @@ eigenvalues/INTLAB/Intlab_V14.1/
 eigenvalues/mass_matrix.mat
 eigenvalues/stiff_matrix.mat
 bound_hsc/checkpoints/
+run_logs/
+review/
+manuscript/
