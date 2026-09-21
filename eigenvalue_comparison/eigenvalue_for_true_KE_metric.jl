@@ -2,6 +2,8 @@ using IntervalArithmetic
 
 include(joinpath(@__DIR__, "..", "apply_fixed_point", "apply_fixed_point.jl"))
 
+println("Begin eigenvalue bounding w.r.t. true KE metric")
+
 setprecision(BigFloat, 256) do
     epsilon = read_bound("fixed_point_bounds")["contraction_radius_upper_bound"]
     constants = get_sobolev_multiplication_constants()
@@ -28,3 +30,5 @@ setprecision(BigFloat, 256) do
     println("True KE invariant lambda_1 lower bound: $lower_text")
     println("True KE invariant lambda_1 upper bound: $upper_text")
 end
+
+println("Eigenvalue bounding complete")
