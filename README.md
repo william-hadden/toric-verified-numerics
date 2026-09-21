@@ -8,9 +8,7 @@ This repository uses a combination of Mathematica to compute the approximate met
 
 ## Requirements
 
-- Mathematica 
-- Julia 1.10 or newer
-- MATLAB
+The tools used to run this code were Mathematica 14.3, Julia 1.12.4, MATLAB R2026a, and INTLAB 14.1.
 
 ## Install dependencies
 
@@ -87,24 +85,14 @@ Get-Content "$repo\pipeline_after_orchestrate_$stamp.log" -Wait -Tail 20
 
 ## Tests
 
-Run the full test suite with:
+Run the two tests individually:
 
 ```bash
-julia --project=. test/runtests.jl
+julia --project=. test/cov_cov_riem_formula_tests.jl
+julia --project=. test/residual_degree_tests.jl
 ```
 
-The test runner also accepts a filter argument for focused runs:
-
-```bash
-julia --project=. test/runtests.jl quotient
-julia --project=. test/runtests.jl ricci
-julia --project=. test/runtests.jl inverse
-julia --project=. test/runtests.jl cheb
-julia --project=. test/runtests.jl utils
-```
-
-- `quotient` checks the coefficient-space quotient differentiation formula in cases where `D = 1`.
-- `ricci` checks Ricci assembly against a polynomial inverse metric with known exact answer.
-- `inverse` runs a small rigorous end-to-end inverse/Ricci certificate on embedded test data.
-- `cheb` runs the Chebyshev multiplication tests.
-- `utils` checks shared CSV/JSON I/O, interval helpers, evaluation, and truncation.
+- `cov_cov_riem_formula_tests.jl` checks the formula for
+  $\lvert\nabla^2\operatorname{Riem}\rvert^2$.
+- `residual_degree_tests.jl` checks the Chebyshev degree allocation used in
+  the residual computation.
