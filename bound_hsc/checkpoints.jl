@@ -44,12 +44,10 @@ end
 """Identify the coefficient data and arithmetic precision used by an HSC run."""
 function hsc_checkpoint_context(coeffs_path::AbstractString)
     resolved_path = realpath(coeffs_path)
-    contents = read(resolved_path, String)
-    normalized_contents = replace(contents, "\r\n" => "\n")
-    normalized_bytes = codeunits(normalized_contents)
+    digest = open(sha256, resolved_path)
     return (
-        coefficient_sha256 = bytes2hex(sha256(normalized_bytes)),
-        coefficient_size = length(normalized_bytes),
+        coefficient_sha256 = bytes2hex(digest),
+        coefficient_size = filesize(resolved_path),
         bigfloat_precision = precision(BigFloat),
         coefficient_format = :rational_csv,
     )

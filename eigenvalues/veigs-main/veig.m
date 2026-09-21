@@ -169,7 +169,7 @@ while index <= max_ind
     [L,D,P] = ldl(E_mid);
     E      = A - lambda_test*B;
 
-    diff_m     = P*L*D*(L')*P' - E;
+    diff_m     = P*intval(L)*intval(D)*intval(L')*P' - E;
     diff_m_inf = norm(sup(abs(diff_m)),'inf');
 
     if diff_m_inf == 0
@@ -194,7 +194,7 @@ while index <= max_ind
             error('Failure in LDL-based positive definiteness check (lower bound).');
         end
 
-        lambda_lower = lambda_test - err_est;
+        lambda_lower = inf(intval(lambda_test) - intval(err_est));
     end
 
     %% ------------------------------------------------------------
@@ -205,7 +205,7 @@ while index <= max_ind
     [L,D,P] = ldl(E_mid);
     E      = A - lambda_test*B;
 
-    diff_m     = P*L*D*(L')*P' - E;
+    diff_m     = P*intval(L)*intval(D)*intval(L')*P' - E;
     diff_m_inf = norm(sup(abs(diff_m)),'inf');
 
     if diff_m_inf == 0
@@ -230,7 +230,7 @@ while index <= max_ind
             error('Failure in LDL-based positive definiteness check (upper bound).');
         end
 
-        lambda_upper = lambda_test + err_est;
+        lambda_upper = sup(intval(lambda_test) + intval(err_est));
     end
 
     %% Store bound

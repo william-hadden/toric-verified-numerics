@@ -186,7 +186,7 @@ function bound_cov_cov_riem_subdivision_local(
         all(isguaranteed, step3.D)
     println("Step 3 guaranteed: $step3_guaranteed")
 
-    step4_progress = start_progress("Step 4:Cov Cov Riemmanian numerator products", 8132)
+    step4_progress = start_progress("Step 4: Build second covariant Riemann numerator", 5416)
     step4 = compute_inverse_derivative_numerator_components_truncated_coeff_space(step3;k = 4, pdeg, progress = step4_progress,)
     finish_progress!(step4_progress)
     println("Step 4: Build cov riem numerator coefficient arrays ... ok")

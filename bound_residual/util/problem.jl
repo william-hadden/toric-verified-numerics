@@ -62,7 +62,7 @@ Compute the Chebyshev values of G and H on the grid.
 """
 function step2_compute_GH_values_grid(
     coeffs::AbstractMatrix{<:Number};
-    pdeg::Integer = 240,
+    pdeg::Integer = 448,
     progress = nothing,
 )
     coeffs_pad = cheb_pad(coeffs, pdeg - 1, pdeg - 1)
@@ -108,7 +108,7 @@ Bound the derivatives of the MA equation on the Lobatto grid, using the Chebyshe
 function step3_compute_MA_derivatives(
     H_values::AbstractMatrix{<:Number},
     G_values::AbstractMatrix{<:Number};
-    pdeg::Integer = 240,
+    pdeg::Integer = 448,
     progress = nothing,
 )
     H_coeffs = cheb_lobatto_values_to_coeffs_2d(H_values)
@@ -181,18 +181,18 @@ function step3_compute_MA_derivatives(
     MAyyy_factor_vals = differentiate_MA_factor_vals(MAyy_factor_vals, :y)
     MAyyy_factor_coeffs, MAyyy_bound = bound_MA_factor("MAyyy", MAyyy_factor_vals)
 
-    write_bound_entry("ma_first_derivatives", "x", MAx_bound)
-    write_bound_entry("ma_first_derivatives", "y", MAy_bound)
+    write_bound_entry("ma_first_derivatives", "x", MAx_bound; rounding = RoundUp)
+    write_bound_entry("ma_first_derivatives", "y", MAy_bound; rounding = RoundUp)
     write_bound_entry("ma_derivatives", "d1", Dict(
         "x" => MAx_bound,
         "y" => MAy_bound,
-    ))
+    ); rounding = RoundUp)
     write_bound_entry("ma_derivatives", "d2", Dict(
         "xx" => MAxx_bound,
         "xy" => MAxy_bound,
         "yx" => MAxy_bound,
         "yy" => MAyy_bound,
-    ))
+    ); rounding = RoundUp)
     write_bound_entry("ma_derivatives", "d3", Dict(
         "xxx" => MAxxx_bound,
         "xxy" => MAxxy_bound,
@@ -202,7 +202,7 @@ function step3_compute_MA_derivatives(
         "yxy" => MAxyy_bound,
         "yyx" => MAxyy_bound,
         "yyy" => MAyyy_bound,
-    ))
+    ); rounding = RoundUp)
 
     return (;
         H_coeffs,
@@ -241,8 +241,9 @@ function step5_compute_residual_bound_by_MVT(H_coeffs::AbstractMatrix{<:Number},
 
     # volume of one torus fibre is 4pi^2, volume of whole manifold 12pi^2
     manifold_volume_sqrt = sqrt(interval(BigFloat(12)) * interval(BigFloat, pi)^2)
-    write_bound_entry("ma_residual_bounds", "C0", residual)
-    write_bound_entry("ma_sobolev_bounds", "L2", manifold_volume_sqrt * residual)
+    write_bound_entry("ma_residual_bounds", "C0", residual; rounding = RoundUp)
+    write_bound_entry("ma_sobolev_bounds", "L2", manifold_volume_sqrt * residual;
+        rounding = RoundUp)
 
     return (;
         residual_bound = residual
@@ -276,7 +277,8 @@ function step_nabla()
         nabla_MA_C0_squared_bound
     )
 
-    write_bound_entry("ma_sobolev_bounds", "nabla_L2", nabla_MA_L2_bound)
+    write_bound_entry("ma_sobolev_bounds", "nabla_L2", nabla_MA_L2_bound;
+        rounding = RoundUp)
     return nothing
 end
 
@@ -321,7 +323,8 @@ function step_nabla2()
     nabla_MA_L2_bound = read_bound("ma_sobolev_bounds")["nabla_L2"]
     nabla2_L2_bound = nabla_2_from_laplace_bound(laplace_MA_L2_bound, nabla_MA_L2_bound)
 
-    write_bound_entry("ma_sobolev_bounds", "nabla2_L2", nabla2_L2_bound)
+    write_bound_entry("ma_sobolev_bounds", "nabla2_L2", nabla2_L2_bound;
+        rounding = RoundUp)
     return nothing
 end
 
@@ -428,6 +431,7 @@ function step_nabla3()
     nabla_laplace_MA_L2_squared_bound = manifold_volume * nabla_laplace_MA_C0_squared_bound
     nabla3_L2_bound = nabla_3_from_laplace_bound(nabla_laplace_MA_L2_squared_bound)
 
-    write_bound_entry("ma_sobolev_bounds", "nabla3_L2", nabla3_L2_bound)
+    write_bound_entry("ma_sobolev_bounds", "nabla3_L2", nabla3_L2_bound;
+        rounding = RoundUp)
     return nothing
 end

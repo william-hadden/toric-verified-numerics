@@ -330,7 +330,7 @@ if direction_right == 1
     else
         % Compare PLDL'P' vs. (A - lambda B) to estimate the interval radius
         diff_m  = P*intval(L)*intval(D)*intval(L')*P' - tmpM; % (not exactly symmetric, hull used)
-        err_est = norm( sup(abs(diff_m)),'inf') / lambda_B_min;
+        err_est = sup(norm(diff_m, 'inf') / intval(lambda_B_min));
 
         % Reduce the error estimate iteratively, ensuring positivity of
         %   err_est * B - ( PLDL'P' - (A - lambda B) )
@@ -407,7 +407,7 @@ if direction_left == 1
     else
         % Error radius via difference of factorization and original
         diff_m  =  tmpM - P*intval(L)*intval(D)*intval(L')*P';
-        err_est = norm( sup(abs(diff_m)),'inf') / lambda_B_min;
+        err_est = sup(norm(diff_m, 'inf') / intval(lambda_B_min));
 
         if ( err_est > (1-lambda_ratio) * ( eig_list(r) - eig_pre ) )
             is_positive = 1;

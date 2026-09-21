@@ -530,54 +530,104 @@ function compute_cov_riem_norm_squared_numerator_coeff_space(
     return enclosure_to_coeffs(norm_squared_num)
 end
 
-"""
-Construct the coefficient-space numerator for `||nabla^2 Riem||^2`.
+"""Construct the numerator of `B_b^{ik}{}_{jl}` with denominator `D^5`."""
+function compute_B_numerator_component(deriv_enc, b, i, k, j, l; pdeg::Integer, progress = nothing)
+    u(i, j) = deriv_enc[(i, j, (0, 0))]
+    du(i, j, a) = deriv_enc[(i, j, derivative_exponent_multiindex_2d(a))]
+    d2u(i, j, a, b) = deriv_enc[(i, j, derivative_exponent_multiindex_2d(a, b))]
+    d3u(i, j, a, b, c) = deriv_enc[(i, j, derivative_exponent_multiindex_2d(a, b, c))]
 
-`deriv_enc` must contain Chebyshev enclosures for inverse-metric derivative
-numerators up to order four. This routine builds the left and right contracted
-factors appearing in the second covariant Riemann norm formula entirely in
-coefficient-enclosure space, then sums their products.
+    component = zero_enclosure(pdeg)
 
-The returned coefficient array represents the numerator of the norm squared;
-the corresponding denominator is `D^12`.
-"""
-function compute_cov_cov_riem_norm_squared_numerator_coeff_space(
-    deriv_enc;
-    pdeg::Integer = 20,
-    progress = nothing,
-)
+    for m in 1:2
+        summand = enclosure_mul(u(b, m), d3u(i, k, j, l, m), pdeg; progress)
+        summand = enclosure_add(summand, enclosure_mul(du(b, m, j), d2u(i, k, m, l), pdeg; progress), pdeg)
+        summand = enclosure_sub(summand, enclosure_mul(du(b, i, m), d2u(m, k, j, l), pdeg; progress), pdeg)
+        summand = enclosure_add(summand, enclosure_mul(du(b, m, l), d2u(i, k, j, m), pdeg; progress), pdeg)
+        summand = enclosure_sub(summand, enclosure_mul(du(b, k, m), d2u(i, m, j, l), pdeg; progress), pdeg)
+        component = enclosure_add(component, summand, pdeg)
+    end
+
+    return component
+end
+
+"""Construct the numerator of `partial_a B_b^{ik}{}_{jl}` with denominator `D^6`."""
+function compute_partial_B_numerator_component(deriv_enc, a, b, i, k, j, l; pdeg::Integer, progress = nothing)
     u(i, j) = deriv_enc[(i, j, (0, 0))]
     du(i, j, a) = deriv_enc[(i, j, derivative_exponent_multiindex_2d(a))]
     d2u(i, j, a, b) = deriv_enc[(i, j, derivative_exponent_multiindex_2d(a, b))]
     d3u(i, j, a, b, c) = deriv_enc[(i, j, derivative_exponent_multiindex_2d(a, b, c))]
     d4u(i, j, a, b, c, d) = deriv_enc[(i, j, derivative_exponent_multiindex_2d(a, b, c, d))]
 
-    norm_squared_num = zero_enclosure(pdeg)
+    component = zero_enclosure(pdeg)
 
-    for i in 1:2, j in 1:2, k in 1:2, l in 1:2
-        for m in 1:2, b in 1:2, a in 1:2, s in 1:2
-            left = enclosure_mul(du(b, m, a), d3u(i, k, j, l, m), pdeg; progress)
-            left = enclosure_add(left, enclosure_mul(u(b, m), d4u(i, k, j, l, m, a), pdeg; progress), pdeg)
-            left = enclosure_add(left, enclosure_mul(d3u(i, k, m, l, a), du(b, m, j), pdeg; progress), pdeg)
-            left = enclosure_add(left, enclosure_mul(d2u(i, k, m, l), d2u(b, m, j, a), pdeg; progress), pdeg)
-            left = enclosure_sub(left, enclosure_mul(d3u(m, k, j, l, a), du(b, i, m), pdeg; progress), pdeg)
-            left = enclosure_sub(left, enclosure_mul(d2u(m, k, j, l), d2u(b, i, m, a), pdeg; progress), pdeg)
-            left = enclosure_add(left, enclosure_mul(d3u(i, k, j, m, a), du(b, m, l), pdeg; progress), pdeg)
-            left = enclosure_add(left, enclosure_mul(d2u(i, k, j, m), d2u(b, m, l, a), pdeg; progress), pdeg)
-            left = enclosure_sub(left, enclosure_mul(d3u(i, m, j, l, a), du(b, k, m), pdeg; progress), pdeg)
-            left = enclosure_sub(left, enclosure_mul(d2u(i, m, j, l), d2u(b, k, m, a), pdeg; progress), pdeg)
-
-            right = enclosure_mul(u(a, s), d4u(j, l, i, k, b, s), pdeg; progress)
-            right = enclosure_add(right, enclosure_mul(d3u(j, l, s, k, b), du(a, s, i), pdeg; progress), pdeg)
-            right = enclosure_sub(right, enclosure_mul(d3u(a, s, i, k, b), du(j, l, s), pdeg; progress), pdeg)
-            right = enclosure_add(right, enclosure_mul(d3u(a, s, i, s, b), du(j, l, k), pdeg; progress), pdeg)
-            right = enclosure_sub(right, enclosure_mul(d3u(j, s, i, k, b), du(a, s, l), pdeg; progress), pdeg)
-
-            term = enclosure_mul(left, right, pdeg; progress)
-            norm_squared_num = enclosure_add(norm_squared_num, term, pdeg)
-        end
+    for m in 1:2
+        summand = enclosure_mul(du(b, m, a), d3u(i, k, j, l, m), pdeg; progress)
+        summand = enclosure_add(summand, enclosure_mul(u(b, m), d4u(i, k, j, l, m, a), pdeg; progress), pdeg)
+        summand = enclosure_add(summand, enclosure_mul(d2u(b, m, j, a), d2u(i, k, m, l), pdeg; progress), pdeg)
+        summand = enclosure_add(summand, enclosure_mul(du(b, m, j), d3u(i, k, m, l, a), pdeg; progress), pdeg)
+        summand = enclosure_sub(summand, enclosure_mul(d2u(b, i, m, a), d2u(m, k, j, l), pdeg; progress), pdeg)
+        summand = enclosure_sub(summand, enclosure_mul(du(b, i, m), d3u(m, k, j, l, a), pdeg; progress), pdeg)
+        summand = enclosure_add(summand, enclosure_mul(d2u(b, m, l, a), d2u(i, k, j, m), pdeg; progress), pdeg)
+        summand = enclosure_add(summand, enclosure_mul(du(b, m, l), d3u(i, k, j, m, a), pdeg; progress), pdeg)
+        summand = enclosure_sub(summand, enclosure_mul(d2u(b, k, m, a), d2u(i, m, j, l), pdeg; progress), pdeg)
+        summand = enclosure_sub(summand, enclosure_mul(du(b, k, m), d3u(i, m, j, l, a), pdeg; progress), pdeg)
+        component = enclosure_add(component, summand, pdeg)
     end
 
+    return component
+end
+
+"""
+Construct the coefficient-space numerator for `||nabla^2 Riem||^2`.
+
+The returned coefficient array represents the numerator of the squared norm;
+the corresponding denominator is `D^12`.
+"""
+function compute_cov_cov_riem_norm_squared_numerator_coeff_space(deriv_enc; pdeg::Integer = 20, progress = nothing)
+    u(i, j) = deriv_enc[(i, j, (0, 0))]
+    du(i, j, a) = deriv_enc[(i, j, derivative_exponent_multiindex_2d(a))]
+    d3u(i, j, a, b, c) = deriv_enc[(i, j, derivative_exponent_multiindex_2d(a, b, c))]
+    d4u(i, j, a, b, c, d) = deriv_enc[(i, j, derivative_exponent_multiindex_2d(a, b, c, d))]
+
+    B = Dict{NTuple{5,Int},Any}()
+    for b in 1:2, i in 1:2, k in 1:2, j in 1:2, l in 1:2
+        B[(b, i, k, j, l)] = compute_B_numerator_component(deriv_enc, b, i, k, j, l; pdeg, progress)
+    end
+
+    partial_B = Dict{NTuple{6,Int},Any}()
+    for a in 1:2, b in 1:2, i in 1:2, k in 1:2, j in 1:2, l in 1:2
+        partial_B[(a, b, i, k, j, l)] =
+            compute_partial_B_numerator_component(deriv_enc, a, b, i, k, j, l; pdeg, progress)
+    end
+
+    pure_num = zero_enclosure(pdeg)
+    mixed_num = zero_enclosure(pdeg)
+
+    for a in 1:2, b in 1:2, i in 1:2, j in 1:2, k in 1:2, l in 1:2, m in 1:2
+        pure_factor = enclosure_mul(u(a, m), partial_B[(m, b, i, k, j, l)], pdeg; progress)
+        pure_factor = enclosure_add(pure_factor, enclosure_mul(du(a, m, j), B[(b, i, k, m, l)], pdeg; progress), pdeg)
+        pure_factor = enclosure_sub(pure_factor, enclosure_mul(du(a, i, m), B[(b, m, k, j, l)], pdeg; progress), pdeg)
+        pure_factor = enclosure_add(pure_factor, enclosure_mul(du(a, m, l), B[(b, i, k, j, m)], pdeg; progress), pdeg)
+        pure_factor = enclosure_sub(pure_factor, enclosure_mul(du(a, k, m), B[(b, i, m, j, l)], pdeg; progress), pdeg)
+        pure_factor = enclosure_sub(pure_factor, enclosure_mul(du(a, b, m), B[(m, i, k, j, l)], pdeg; progress), pdeg)
+
+        pure_term = enclosure_mul(d4u(j, l, i, k, a, b), pure_factor, pdeg; progress)
+        pure_num = enclosure_add(pure_num, pure_term, pdeg)
+
+        mixed_factor = enclosure_mul(u(a, m), d4u(j, l, i, k, b, m), pdeg; progress)
+        mixed_factor = enclosure_add(mixed_factor, enclosure_mul(du(a, m, i), d3u(j, l, m, k, b), pdeg; progress), pdeg)
+        mixed_factor = enclosure_sub(mixed_factor, enclosure_mul(du(a, j, m), d3u(m, l, i, k, b), pdeg; progress), pdeg)
+        mixed_factor = enclosure_add(mixed_factor, enclosure_mul(du(a, m, k), d3u(j, l, i, m, b), pdeg; progress), pdeg)
+        mixed_factor = enclosure_sub(mixed_factor, enclosure_mul(du(a, l, m), d3u(j, m, i, k, b), pdeg; progress), pdeg)
+        mixed_factor = enclosure_add(mixed_factor, enclosure_mul(du(a, m, b), d3u(j, l, i, k, m), pdeg; progress), pdeg)
+
+        mixed_term = enclosure_mul(partial_B[(a, b, i, k, j, l)], mixed_factor, pdeg; progress)
+        mixed_num = enclosure_add(mixed_num, mixed_term, pdeg)
+    end
+
+    norm_squared_num = enclosure_add(pure_num, mixed_num, pdeg)
+    norm_squared_num = enclosure_scale(norm_squared_num, interval_half(), pdeg)
     return enclosure_to_coeffs(norm_squared_num)
 end
 
