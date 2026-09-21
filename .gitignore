@@ -1,4 +1,5 @@
 *.vscode
+.venv
 .DS_Store
 Manifest.toml
 data/happrox/coeffs-rational.csv.zip
